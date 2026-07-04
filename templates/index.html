@@ -64,7 +64,7 @@
         </div>
         
         <!-- Month/Year Navigation -->
-        <div class="glass-card p-3 d-flex align-items-center">
+        <div class="glass-card p-3 d-flex align-items-center gap-2 flex-wrap">
             <form action="/" method="GET" class="d-flex align-items-center gap-2 m-0">
                 <select name="month" class="form-select form-control-custom" style="width: auto;">
                     {{ range $index, $name := .ThaiMonths }}
@@ -75,6 +75,9 @@
                 <input type="number" name="year" value="{{ .Year }}" class="form-control form-control-custom" style="width: 100px;" min="2000" max="2100">
                 <button type="submit" class="btn btn-cyber"><i class="bi bi-calendar-check-fill me-1"></i> แสดง</button>
             </form>
+            <button type="button" class="btn btn-warning text-dark fw-bold ms-sm-2" data-bs-toggle="modal" data-bs-target="#summaryModal">
+                <i class="bi bi-bar-chart-line-fill me-1"></i> สรุปยอดรายปี
+            </button>
         </div>
     </div>
 
@@ -437,6 +440,59 @@
 </div>
 
 <!-- ================= MODALS ================= -->
+
+<!-- Modal: สรุปยอดรายปี (Yearly Summary) -->
+<div class="modal fade" id="summaryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title"><i class="bi bi-bar-chart-line-fill me-2 text-cyan"></i>รายงานสรุปยอดรวมประจำปี {{ .Year }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle">
+                        <thead>
+                            <tr>
+                                <th>เดือน</th>
+                                <th style="text-align: center;">จำนวนผู้ชำระ</th>
+                                <th style="text-align: right;">เงินต้น</th>
+                                <th style="text-align: right;">ดอกเบี้ย</th>
+                                <th style="text-align: right;">ยอดรวม</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .YearlySummaries }}
+                            <tr>
+                                <td><span class="fw-bold">{{ .MonthName }}</span></td>
+                                <td style="text-align: center;">
+                                    <span class="badge {{ if eq .PaidCount .TotalMembers }}bg-success-subtle text-success{{ else }}bg-warning-subtle text-warning{{ end }} px-2 py-1 fs-7">
+                                        {{ .PaidCount }} / {{ .TotalMembers }} คน
+                                    </span>
+                                </td>
+                                <td style="text-align: right;">{{ .PrincipalMoney | formatMoney }} ฿</td>
+                                <td style="text-align: right;" class="text-warning fw-bold">{{ .InterestMoney | formatMoney }} ฿</td>
+                                <td style="text-align: right;" class="text-info fw-bold">{{ .TotalMoney | formatMoney }} ฿</td>
+                            </tr>
+                            {{ end }}
+                            <tr class="table-dark" style="background: rgba(15, 23, 42, 0.95); font-weight: bold; border-top: 2px solid var(--border-color);">
+                                <td>ยอดรวมทั้งปี</td>
+                                <td style="text-align: center;">-</td>
+                                <td style="text-align: right; color: #fff;">{{ .YearlyTotalPrincipal | formatMoney }} ฿</td>
+                                <td style="text-align: right;" class="text-warning">{{ .YearlyTotalInterest | formatMoney }} ฿</td>
+                                <td style="text-align: right;" class="text-info">{{ .YearlyTotalCollected | formatMoney }} ฿</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom">
+                <button type="button" class="btn btn-cyber-outline" onclick="window.print()"><i class="bi bi-printer me-1"></i> พิมพ์รายงาน</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modal: เพิ่มสมาชิก (Add Member) -->
 <div class="modal fade" id="addMemberModal" tabindex="-1" aria-hidden="true">

@@ -20,6 +20,16 @@ type MemberRow struct {
 	WinnerNumber     int
 }
 
+// MonthSummary represents the monthly financial summary report
+type MonthSummary struct {
+	MonthName      string  `json:"month_name"`
+	PaidCount      int     `json:"paid_count"`
+	TotalMembers   int     `json:"total_members"`
+	PrincipalMoney float64 `json:"principal_money"`
+	InterestMoney  float64 `json:"interest_money"`
+	TotalMoney     float64 `json:"total_money"`
+}
+
 // IndexHandler renders the main dashboard and member tables
 func IndexHandler(c *gin.Context) {
 	now := time.Now()
@@ -60,12 +70,12 @@ func IndexHandler(c *gin.Context) {
 	var setting Setting
 	var allMembers []Member
 	var payments []Payment
+	var allPayments []Payment
 	var isUsingSheets bool
 
 	sheetsURL := getSheetsURL()
 	if sheetsURL != "" {
 		var err error
-		var allPayments []Payment
 		allMembers, allPayments, setting, err = fetchSheetsData()
 		if err != nil {
 			log.Printf("Error fetching sheets data: %v. Falling back to GORM SQLite.", err)
@@ -103,6 +113,8 @@ func IndexHandler(c *gin.Context) {
 
 		// Fetch all payments for this month/year
 		DB.Where("month = ? AND year = ?", month, year).Find(&payments)
+		// Fetch all payments for this year (for report)
+		DB.Where("year = ?", year).Find(&allPayments)
 	}
 
 	// Fetch members matching search (or all)
@@ -234,24 +246,80 @@ func IndexHandler(c *gin.Context) {
 		"กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 	}
 
+	// Calculate yearly summary report
+	var yearlySummaries []MonthSummary
+	var yearlyTotalPrincipal float64 = 0
+	var yearlyTotalInterest float64 = 0
+	var yearlyTotalCollected float64 = 0
+
+	memberLookup := make(map[uint]Member)
+	for _, m := range allMembers {
+		memberLookup[m.ID] = m
+	}
+
+	for mIdx := 1; mIdx <= 12; mIdx++ {
+		monthName := thaiMonths[mIdx-1]
+		pCount := 0
+		principal := 0.0
+		interest := 0.0
+		total := 0.0
+
+		for _, p := range allPayments {
+			if p.Month == mIdx && p.Year == year {
+				m, exists := memberLookup[p.MemberID]
+				if !exists {
+					continue
+				}
+				isDead := m.HasReceivedShare && (m.ReceivedYear < year || (m.ReceivedYear == year && m.ReceivedMonth <= mIdx))
+				if p.Paid {
+					pCount++
+					principal += setting.MonthlyAmount
+					if isDead {
+						interest += m.InterestAmount
+						total += setting.MonthlyAmount + m.InterestAmount
+					} else {
+						total += setting.MonthlyAmount
+					}
+				}
+			}
+		}
+
+		yearlySummaries = append(yearlySummaries, MonthSummary{
+			MonthName:      monthName,
+			PaidCount:      pCount,
+			TotalMembers:   len(allMembers),
+			PrincipalMoney: principal,
+			InterestMoney:  interest,
+			TotalMoney:     total,
+		})
+
+		yearlyTotalPrincipal += principal
+		yearlyTotalInterest += interest
+		yearlyTotalCollected += total
+	}
+
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"Rows":               rows,
-		"TotalMembers":       len(allMembers),
-		"PaidCount":          paidCount,
-		"UnpaidCount":        unpaidCount,
-		"CollectedMoney":     collectedMoney,
-		"LatestWinnerName":   latestWinnerName,
-		"LatestInterest":     latestInterest,
-		"LatestWinnerNumber": latestWinnerNumber,
-		"Month":            month,
-		"Year":             year,
-		"Search":           search,
-		"Setting":          setting,
-		"ThaiMonthName":    thaiMonths[month-1],
-		"ThaiMonths":       thaiMonths,
-		"IsAdmin":            isAdmin(c),
-		"AlertMsg":           alertMsg,
-		"AlertErr":           alertErr,
+		"Rows":                 rows,
+		"TotalMembers":         len(allMembers),
+		"PaidCount":            paidCount,
+		"UnpaidCount":          unpaidCount,
+		"CollectedMoney":       collectedMoney,
+		"LatestWinnerName":     latestWinnerName,
+		"LatestInterest":       latestInterest,
+		"LatestWinnerNumber":   latestWinnerNumber,
+		"Month":                month,
+		"Year":                 year,
+		"Search":               search,
+		"Setting":              setting,
+		"ThaiMonthName":        thaiMonths[month-1],
+		"ThaiMonths":           thaiMonths,
+		"IsAdmin":              isAdmin(c),
+		"AlertMsg":             alertMsg,
+		"AlertErr":             alertErr,
+		"YearlySummaries":      yearlySummaries,
+		"YearlyTotalPrincipal": yearlyTotalPrincipal,
+		"YearlyTotalInterest":  yearlyTotalInterest,
+		"YearlyTotalCollected": yearlyTotalCollected,
 	})
 }
 
