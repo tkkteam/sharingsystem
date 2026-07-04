@@ -276,6 +276,9 @@
                                     {{ if $row.Member.HasReceivedShare }}
                                         <span class="badge-winner ms-1"><i class="bi bi-trophy-fill"></i> ได้แชร์แล้ว คนที่ {{ $row.WinnerNumber }}</span>
                                     {{ end }}
+                                    {{ if $.IsAdmin }}
+                                        <div style="font-size: 0.75rem; margin-top: 2px;" class="text-warning fw-bold"><i class="bi bi-key-fill me-1"></i>PIN: {{ $row.Member.BidPassword }}</div>
+                                    {{ end }}
                                 </td>
                                 <td><i class="bi bi-telephone text-secondary me-1"></i>{{ if $row.Member.Phone }}{{ $row.Member.Phone }}{{ else }}-{{ end }}</td>
                                 <td style="text-align: center;">
@@ -398,6 +401,9 @@
                                             <a href="tel:{{ $row.Member.Phone }}" class="text-secondary fs-7 text-decoration-none"><i class="bi bi-telephone me-1"></i>{{ $row.Member.Phone }}</a>
                                         {{ else }}
                                             <span class="text-secondary fs-7"><i class="bi bi-telephone me-1"></i>ไม่มีเบอร์โทร</span>
+                                        {{ end }}
+                                        {{ if $.IsAdmin }}
+                                            <div class="text-warning fs-7 fw-bold mt-1"><i class="bi bi-key-fill me-1"></i>PIN: {{ $row.Member.BidPassword }}</div>
                                         {{ end }}
                                     </div>
                                     {{ if $row.Member.HasReceivedShare }}
