@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
 )
@@ -362,7 +363,7 @@ func TogglePaymentHandler(c *gin.Context) {
 
 	var payment Payment
 	err = DB.Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).First(&payment).Error
-	now := time.Now()
+	now := getCurrentThailandTime()
 	if err != nil {
 		// Create new payment
 		payment = Payment{
@@ -453,4 +454,14 @@ func ResetPaymentHandler(c *gin.Context) {
 	DB.Where("month = ? AND year = ?", month, year).Delete(&Payment{})
 
 	c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=reset_success")
+}
+
+// Helper to get current time in Thailand (Bangkok) location
+func getCurrentThailandTime() time.Time {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err == nil {
+		return time.Now().In(loc)
+	}
+	// Fallback to manual UTC + 7 offset
+	return time.Now().UTC().Add(7 * time.Hour)
 }

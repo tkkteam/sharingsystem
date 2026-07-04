@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"log"
 	"os"
+	"time"
+	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,6 +36,20 @@ func main() {
 				result = append(result, s[i])
 			}
 			return string(result)
+		},
+		"formatThaiTime": func(t *time.Time) string {
+			if t == nil {
+				return ""
+			}
+			loc, err := time.LoadLocation("Asia/Bangkok")
+			var localTime time.Time
+			if err == nil {
+				localTime = t.In(loc)
+			} else {
+				// Fallback to manual offset
+				localTime = t.UTC().Add(7 * time.Hour)
+			}
+			return localTime.Format("02/01/2006 15:04")
 		},
 	})
 

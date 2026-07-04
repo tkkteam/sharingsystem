@@ -266,7 +266,7 @@
                                                     <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
                                                     {{ if $row.Payment.PaidDate }}
                                                         <div style="font-size: 0.65rem; opacity: 0.8; margin-top: 2px;">
-                                                            {{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }}
+                                                            {{ $row.Payment.PaidDate | formatThaiTime }}
                                                         </div>
                                                     {{ end }}
                                                 {{ else }}
@@ -280,7 +280,7 @@
                                                 <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
                                                 {{ if $row.Payment.PaidDate }}
                                                     <div style="font-size: 0.65rem; opacity: 0.8; margin-top: 2px;">
-                                                        {{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }}
+                                                        {{ $row.Payment.PaidDate | formatThaiTime }}
                                                     </div>
                                                 {{ end }}
                                             </span>
@@ -378,7 +378,7 @@
                                                 {{ if $row.Payment.Paid }}
                                                     <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
                                                     {{ if $row.Payment.PaidDate }}
-                                                        <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }})</span>
+                                                        <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate | formatThaiTime }})</span>
                                                     {{ end }}
                                                 {{ else }}
                                                     <i class="bi bi-clock-fill"></i> ยังไม่ชำระ (กดเพื่อชำระเงิน)
@@ -389,9 +389,9 @@
                                         <div class="toggle-btn text-center {{ if $row.Payment.Paid }}badge-paid{{ else }}badge-unpaid{{ end }} w-100 py-2" style="cursor: default;">
                                             {{ if $row.Payment.Paid }}
                                                 <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
-                                                {{ if $row.Payment.PaidDate }}
-                                                    <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }})</span>
-                                                {{ end }}
+                                                    {{ if $row.Payment.PaidDate }}
+                                                        <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate | formatThaiTime }})</span>
+                                                    {{ end }}
                                             {{ else }}
                                                 <i class="bi bi-clock-fill"></i> ยังไม่ชำระ
                                             {{ end }}
