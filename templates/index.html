@@ -208,6 +208,74 @@
         </div>
     </div>
 
+    <!-- Bidding Summary Panel (Visible to Admin always, or to everyone once Auction is Closed) -->
+    {{ if or $.IsAdmin $.AuctionClosed }}
+    <div class="glass-card p-4 mb-4 animate-fade-in" style="animation-delay: 0.18s;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-award-fill text-warning me-2"></i>สรุปผลการเสนอราคาประมูล (งวดประจำเดือน {{ $.ThaiMonthName }} {{ $.Year }})
+            </h5>
+            {{ if and $.IsAdmin (not $.AuctionClosed) }}
+                <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>กำลังเปิดรับเสนอราคา (แอดมินเห็นราคาเสนอได้คนเดียว)</span>
+            {{ else if $.AuctionClosed }}
+                <span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>ปิดการเสนอราคาแล้ว (เปิดเผยราคาเสนอเป็นสาธารณะ)</span>
+            {{ end }}
+        </div>
+        
+        {{ if .Bids }}
+            <div class="table-responsive">
+                <table class="table table-custom align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%; text-align: center;">ลำดับที่</th>
+                            <th>ผู้เสนอราคา</th>
+                            <th style="text-align: right;">ดอกเบี้ยเสนอ (บาท)</th>
+                            <th style="text-align: center;">เวลาที่เสนอ</th>
+                            {{ if $.IsAdmin }}
+                            <th style="text-align: center;">การดำเนินการ</th>
+                            {{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range $bIdx, $bid := .Bids }}
+                        <tr {{ if eq $bIdx 0 }}style="background: rgba(255, 193, 7, 0.05); border-left: 4px solid var(--warning-color);"{{ end }}>
+                            <td style="text-align: center;">
+                                {{ if eq $bIdx 0 }}
+                                    <span class="badge bg-warning text-dark fs-7"><i class="bi bi-trophy-fill text-dark me-1"></i> อันดับ 1 (สูงสุด)</span>
+                                {{ else }}
+                                    <span class="badge bg-secondary px-2 py-1 fs-7">อันดับ {{ add $bIdx 1 }}</span>
+                                {{ end }}
+                            </td>
+                            <td>
+                                <span class="fw-bold text-dark">{{ $bid.Member.Name }}</span>
+                            </td>
+                            <td style="text-align: right;" class="fw-bold text-warning fs-5">
+                                {{ $bid.Amount | formatMoney }} ฿
+                            </td>
+                            <td style="text-align: center;" class="text-secondary fs-7">
+                                {{ $bid.CreatedAt | formatThaiTime }}
+                            </td>
+                            {{ if $.IsAdmin }}
+                            <td style="text-align: center;">
+                                <button type="button" class="btn btn-sm btn-warning text-dark fw-bold px-3 py-1"
+                                        onclick="selectWinnerFromBid('{{ $bid.MemberID }}', '{{ $bid.Amount }}')">
+                                    <i class="bi bi-check-circle-fill me-1"></i> ยืนยันผลรับแชร์
+                                </button>
+                            </td>
+                            {{ end }}
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        {{ else }}
+            <div class="text-center py-4 text-secondary">
+                <i class="bi bi-inbox fs-3 d-block mb-2"></i> ยังไม่มีสมาชิกคนใดยื่นเสนอราคาในงวดนี้
+            </div>
+        {{ end }}
+    </div>
+    {{ end }}
+
     <!-- Search & Member Table Section -->
     <div class="glass-card p-4 animate-fade-in" style="animation-delay: 0.2s;">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -1283,6 +1351,22 @@
         var modalEl = document.getElementById('bidModal');
         var bidModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         bidModal.show();
+    }
+
+    // Populate record winner modal dynamically from bid results
+    function selectWinnerFromBid(memberId, amount) {
+        var selectEl = document.querySelector('#winnerModal select[name="member_id"]');
+        if (selectEl) {
+            selectEl.value = memberId;
+        }
+        var interestEl = document.querySelector('#winnerModal input[name="interest_amount"]');
+        if (interestEl) {
+            interestEl.value = amount;
+        }
+        
+        var modalEl = document.getElementById('winnerModal');
+        var winnerModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        winnerModal.show();
     }
 </script>
 

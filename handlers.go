@@ -347,6 +347,21 @@ func IndexHandler(c *gin.Context) {
 		}
 	}
 
+	// Populate Member objects in monthBids using memberLookup
+	for i := range monthBids {
+		if m, exists := memberLookup[monthBids[i].MemberID]; exists {
+			monthBids[i].Member = m
+		}
+	}
+
+	// Sort monthBids descending by Amount (Tie breaker: CreatedAt oldest first)
+	sort.Slice(monthBids, func(i, j int) bool {
+		if monthBids[i].Amount != monthBids[j].Amount {
+			return monthBids[i].Amount > monthBids[j].Amount
+		}
+		return monthBids[i].CreatedAt.Before(monthBids[j].CreatedAt)
+	})
+
 	c.HTML(http.StatusOK, "index.html", gin.H{
 		"Rows":                 rows,
 		"TotalMembers":         len(allMembers),
@@ -371,6 +386,7 @@ func IndexHandler(c *gin.Context) {
 		"YearlyTotalCollected": yearlyTotalCollected,
 		"AuctionClosed":        auctionClosed,
 		"AuctionDeadlineStr":   auctionDeadlineStr,
+		"Bids":                 monthBids,
 	})
 }
 
