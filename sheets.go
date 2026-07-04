@@ -89,6 +89,7 @@ func updateMemberSheets(m Member) error {
 		"id":                 m.ID,
 		"name":               m.Name,
 		"phone":              m.Phone,
+		"bid_password":       m.BidPassword,
 		"has_received_share": m.HasReceivedShare,
 		"interest_amount":    m.InterestAmount,
 		"received_month":     m.ReceivedMonth,
