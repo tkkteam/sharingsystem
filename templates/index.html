@@ -39,7 +39,7 @@
     {{ end }}
 
     <!-- Admin mode status bar -->
-    <div class="d-flex justify-content-between align-items-center mb-3 animate-fade-in">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3 animate-fade-in">
         <div>
             {{ if .IsAdmin }}
                 <span class="badge bg-success p-2 fs-7"><i class="bi bi-shield-lock-fill me-1"></i>โหมดผู้ดูแลระบบ (Admin Mode)</span>
@@ -47,11 +47,11 @@
                 <span class="badge bg-secondary p-2 fs-7"><i class="bi bi-eye-fill me-1"></i>โหมดอ่านอย่างเดียว (Read-Only Mode)</span>
             {{ end }}
         </div>
-        <div>
+        <div class="w-100 w-sm-auto">
             {{ if .IsAdmin }}
-                <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right me-1"></i>ออกจากระบบ Admin</a>
+                <a href="/logout" class="btn btn-sm btn-outline-danger w-100 w-sm-auto"><i class="bi bi-box-arrow-right me-1"></i>ออกจากระบบ Admin</a>
             {{ else }}
-                <button type="button" class="btn btn-sm btn-cyber" data-bs-toggle="modal" data-bs-target="#loginModal"><i class="bi bi-box-arrow-in-right me-1"></i>เข้าสู่ระบบ Admin</button>
+                <button type="button" class="btn btn-sm btn-cyber w-100 w-sm-auto" data-bs-toggle="modal" data-bs-target="#loginModal"><i class="bi bi-box-arrow-in-right me-1"></i>เข้าสู่ระบบ Admin</button>
             {{ end }}
         </div>
     </div>
