@@ -1,8 +1,11 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 	_ "time/tzdata"
 
@@ -55,38 +58,66 @@ func IndexHandler(c *gin.Context) {
 
 	// Fetch current setting
 	var setting Setting
-	if err := DB.First(&setting, 1).Error; err != nil {
-		setting = Setting{MonthlyAmount: 1000}
+	var allMembers []Member
+	var payments []Payment
+	var isUsingSheets bool
+
+	sheetsURL := getSheetsURL()
+	if sheetsURL != "" {
+		var err error
+		allMembers, payments, setting, err = fetchSheetsData()
+		if err != nil {
+			log.Printf("Error fetching sheets data: %v. Falling back to GORM SQLite.", err)
+		} else {
+			isUsingSheets = true
+		}
 	}
 
-	// Ensure payments exist for all members for this month/year
-	var allMembers []Member
-	DB.Find(&allMembers)
-	for _, m := range allMembers {
-		var payment Payment
-		err := DB.Where("member_id = ? AND month = ? AND year = ?", m.ID, month, year).First(&payment).Error
-		if err != nil {
-			newPayment := Payment{
-				MemberID: m.ID,
-				Month:    month,
-				Year:     year,
-				Paid:     false,
-			}
-			DB.Create(&newPayment)
+	if !isUsingSheets {
+		if err := DB.First(&setting, 1).Error; err != nil {
+			setting = Setting{MonthlyAmount: 1000}
 		}
+
+		// Ensure payments exist for all members for this month/year
+		DB.Find(&allMembers)
+		for _, m := range allMembers {
+			var payment Payment
+			err := DB.Where("member_id = ? AND month = ? AND year = ?", m.ID, month, year).First(&payment).Error
+			if err != nil {
+				newPayment := Payment{
+					MemberID: m.ID,
+					Month:    month,
+					Year:     year,
+					Paid:     false,
+				}
+				DB.Create(&newPayment)
+			}
+		}
+
+		// Fetch all payments for this month/year
+		DB.Where("month = ? AND year = ?", month, year).Find(&payments)
 	}
 
 	// Fetch members matching search (or all)
 	var members []Member
-	if search != "" {
-		DB.Where("name LIKE ? OR phone LIKE ?", "%"+search+"%", "%"+search+"%").Find(&members)
+	if isUsingSheets {
+		if search != "" {
+			searchLower := strings.ToLower(search)
+			for _, m := range allMembers {
+				if strings.Contains(strings.ToLower(m.Name), searchLower) || strings.Contains(strings.ToLower(m.Phone), searchLower) {
+					members = append(members, m)
+				}
+			}
+		} else {
+			members = allMembers
+		}
 	} else {
-		DB.Find(&members)
+		if search != "" {
+			DB.Where("name LIKE ? OR phone LIKE ?", "%"+search+"%", "%"+search+"%").Find(&members)
+		} else {
+			DB.Find(&members)
+		}
 	}
-
-	// Fetch all payments for this month/year
-	var payments []Payment
-	DB.Where("month = ? AND year = ?", month, year).Find(&payments)
 
 	// Map payments by MemberID for fast lookup
 	paymentMap := make(map[uint]Payment)
@@ -96,7 +127,25 @@ func IndexHandler(c *gin.Context) {
 
 	// Fetch all winners sorted chronologically to determine their sequence number
 	var winners []Member
-	DB.Where("has_received_share = ?", true).Order("received_year asc, received_month asc, id asc").Find(&winners)
+	if isUsingSheets {
+		for _, m := range allMembers {
+			if m.HasReceivedShare {
+				winners = append(winners, m)
+			}
+		}
+		sort.Slice(winners, func(i, j int) bool {
+			if winners[i].ReceivedYear != winners[j].ReceivedYear {
+				return winners[i].ReceivedYear < winners[j].ReceivedYear
+			}
+			if winners[i].ReceivedMonth != winners[j].ReceivedMonth {
+				return winners[i].ReceivedMonth < winners[j].ReceivedMonth
+			}
+			return winners[i].ID < winners[j].ID
+		})
+	} else {
+		DB.Where("has_received_share = ?", true).Order("received_year asc, received_month asc, id asc").Find(&winners)
+	}
+
 	winnerNumberMap := make(map[uint]int)
 	for idx, w := range winners {
 		winnerNumberMap[w.ID] = idx + 1
@@ -108,14 +157,17 @@ func IndexHandler(c *gin.Context) {
 	var unpaidCount int64 = 0
 	var collectedMoney float64 = 0
 
-	var totalPayments []Payment
-	DB.Preload("Member").Where("month = ? AND year = ?", month, year).Find(&totalPayments)
-	for _, p := range totalPayments {
-		isDead := p.Member.HasReceivedShare && (p.Member.ReceivedYear < year || (p.Member.ReceivedYear == year && p.Member.ReceivedMonth <= month))
-		if p.Paid {
+	for _, m := range allMembers {
+		p, exists := paymentMap[m.ID]
+		paid := false
+		if exists && p.Paid {
+			paid = true
+		}
+		isDead := m.HasReceivedShare && (m.ReceivedYear < year || (m.ReceivedYear == year && m.ReceivedMonth <= month))
+		if paid {
 			paidCount++
 			if isDead {
-				collectedMoney += setting.MonthlyAmount + p.Member.InterestAmount
+				collectedMoney += setting.MonthlyAmount + m.InterestAmount
 			} else {
 				collectedMoney += setting.MonthlyAmount
 			}
@@ -147,16 +199,26 @@ func IndexHandler(c *gin.Context) {
 		})
 	}
 
-	// Fetch recipient of share for the selected month/year
-	var latestWinner Member
-	err := DB.Where("has_received_share = ? AND received_month = ? AND received_year = ?", true, month, year).First(&latestWinner).Error
 	latestWinnerName := "-"
 	latestInterest := 0.0
 	latestWinnerNumber := 0
-	if err == nil {
-		latestWinnerName = latestWinner.Name
-		latestInterest = latestWinner.InterestAmount
-		latestWinnerNumber = winnerNumberMap[latestWinner.ID]
+	if isUsingSheets {
+		for _, m := range allMembers {
+			if m.HasReceivedShare && m.ReceivedMonth == month && m.ReceivedYear == year {
+				latestWinnerName = m.Name
+				latestInterest = m.InterestAmount
+				latestWinnerNumber = winnerNumberMap[m.ID]
+				break
+			}
+		}
+	} else {
+		var latestWinner Member
+		err := DB.Where("has_received_share = ? AND received_month = ? AND received_year = ?", true, month, year).First(&latestWinner).Error
+		if err == nil {
+			latestWinnerName = latestWinner.Name
+			latestInterest = latestWinner.InterestAmount
+			latestWinnerNumber = winnerNumberMap[latestWinner.ID]
+		}
 	}
 
 	// Thai month names helper
@@ -196,6 +258,15 @@ func AddMemberHandler(c *gin.Context) {
 	phone := c.PostForm("phone")
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ชื่อสมาชิกห้ามว่าง"})
+		return
+	}
+
+	if getSheetsURL() != "" {
+		if err := addMemberSheets(name, phone); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add member to Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 
@@ -246,6 +317,56 @@ func UpdateMemberHandler(c *gin.Context) {
 		return
 	}
 
+	if getSheetsURL() != "" {
+		allM, _, _, err := fetchSheetsData()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch from Google Sheets"})
+			return
+		}
+		var member Member
+		found := false
+		for _, m := range allM {
+			if m.ID == uint(id) {
+				member = m
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลสมาชิก"})
+			return
+		}
+
+		member.Name = name
+		member.Phone = phone
+		member.HasReceivedShare = (hasReceivedShareStr == "true" || hasReceivedShareStr == "on")
+		
+		if member.HasReceivedShare {
+			if interest, err := strconv.ParseFloat(interestAmountStr, 64); err == nil {
+				member.InterestAmount = interest
+			} else {
+				member.InterestAmount = 0
+			}
+			if rMonth, err := strconv.Atoi(receivedMonthStr); err == nil {
+				member.ReceivedMonth = rMonth
+			}
+			if rYear, err := strconv.Atoi(receivedYearStr); err == nil {
+				member.ReceivedYear = rYear
+			}
+		} else {
+			member.InterestAmount = 0
+			member.ReceivedMonth = 0
+			member.ReceivedYear = 0
+		}
+
+		if err := updateMemberSheets(member); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/")
+		return
+	}
+
 	var member Member
 	if err := DB.First(&member, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลสมาชิก"})
@@ -291,6 +412,15 @@ func DeleteMemberHandler(c *gin.Context) {
 		return
 	}
 
+	if getSheetsURL() != "" {
+		if err := deleteMemberSheets(uint(id)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete from Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/")
+		return
+	}
+
 	// Delete related payments and then the member
 	DB.Where("member_id = ?", id).Delete(&Payment{})
 	DB.Delete(&Member{}, id)
@@ -313,12 +443,6 @@ func SaveWinnerHandler(c *gin.Context) {
 		return
 	}
 
-	var member Member
-	if err := DB.First(&member, memberID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลสมาชิก"})
-		return
-	}
-
 	interest, _ := strconv.ParseFloat(interestAmountStr, 64)
 	monthStr := c.PostForm("month")
 	yearStr := c.PostForm("year")
@@ -331,6 +455,45 @@ func SaveWinnerHandler(c *gin.Context) {
 	}
 	if yVal, err := strconv.Atoi(yearStr); err == nil && yVal >= 2000 {
 		year = yVal
+	}
+
+	if getSheetsURL() != "" {
+		allM, _, _, err := fetchSheetsData()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch from Google Sheets"})
+			return
+		}
+		var member Member
+		found := false
+		for _, m := range allM {
+			if m.ID == uint(memberID) {
+				member = m
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลสมาชิก"})
+			return
+		}
+
+		member.HasReceivedShare = true
+		member.InterestAmount = interest
+		member.ReceivedMonth = month
+		member.ReceivedYear = year
+
+		if err := updateMemberSheets(member); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save winner to Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/?month="+strconv.Itoa(month)+"&year="+strconv.Itoa(year))
+		return
+	}
+
+	var member Member
+	if err := DB.First(&member, memberID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลสมาชิก"})
+		return
 	}
 
 	member.HasReceivedShare = true
@@ -360,6 +523,15 @@ func TogglePaymentHandler(c *gin.Context) {
 
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
+
+	if getSheetsURL() != "" {
+		if err := togglePaymentSheets(uint(memberID), month, year); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to toggle payment on Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr)
+		return
+	}
 
 	var payment Payment
 	err = DB.Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).First(&payment).Error
@@ -398,6 +570,15 @@ func UpdateSettingsHandler(c *gin.Context) {
 	monthlyAmount, err := strconv.ParseFloat(monthlyAmountStr, 64)
 	if err != nil || monthlyAmount <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "จำนวนเงินส่งรายเดือนไม่ถูกต้อง"})
+		return
+	}
+
+	if getSheetsURL() != "" {
+		if err := updateSettingsSheets(monthlyAmount); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update settings on Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 
@@ -449,6 +630,15 @@ func ResetPaymentHandler(c *gin.Context) {
 	yearStr := c.PostForm("year")
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
+
+	if getSheetsURL() != "" {
+		if err := resetPaymentSheets(month, year); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset payments on Google Sheets"})
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=reset_success")
+		return
+	}
 
 	// Delete all payments for this month/year
 	DB.Where("month = ? AND year = ?", month, year).Delete(&Payment{})
