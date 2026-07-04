@@ -78,6 +78,8 @@ func IndexHandler(c *gin.Context) {
 		alertErr = "สมาชิกคนนี้ได้รับแชร์ในอดีตไปแล้ว ไม่สามารถเสนอราคาประมูลได้อีก!"
 	} else if errMsg == "bid_not_started" {
 		alertErr = "ขออภัย: ขณะนี้ระบบยังไม่เปิดระบบรับเสนอราคาประมูลแชร์ประจำงวด!"
+	} else if errMsg == "bid_too_low" {
+		alertErr = "ขออภัย: จำนวนดอกเบี้ยเสนอประมูลต้องไม่ต่ำกว่า 200 บาท!"
 	}
 
 	// Fetch current setting
@@ -866,8 +868,8 @@ func SubmitBidHandler(c *gin.Context) {
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
 	amount, err := strconv.ParseFloat(amountStr, 64)
-	if err != nil || amount < 0 {
-		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=invalid_bid_amount")
+	if err != nil || amount < 200 {
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=bid_too_low")
 		return
 	}
 

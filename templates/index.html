@@ -704,11 +704,10 @@
                         <input type="password" name="pin" class="form-control form-control-custom" placeholder="กรอก PIN ของคุณ..." required autocomplete="off">
                         <div class="form-text text-secondary mt-1">รหัสความปลอดภัยที่ออกโดยแอดมิน เพื่อใช้ระบุตัวตนในการเสนอราคา</div>
                     </div>
-                    
                     <div class="mb-3">
                         <label class="form-label text-secondary">ดอกเบี้ยประมูลที่เสนอ (บาท)</label>
-                        <input type="number" name="amount" class="form-control form-control-custom" placeholder="เช่น 200" min="0" required>
-                        <div class="form-text text-secondary mt-1">เสนอได้เพียง 1 ครั้งในงวดนี้ และไม่สามารถเปิดเผยยอดจนกว่าจะหมดเวลาประมูล</div>
+                        <input type="number" name="amount" class="form-control form-control-custom" placeholder="เช่น 250" min="200" required>
+                        <div class="form-text text-secondary mt-1">กำหนดขั้นต่ำห้ามต่ำกว่า 200 บาท เสนอได้เพียง 1 ครั้งในงวดนี้</div>
                     </div>
                 </div>
                 <div class="modal-footer modal-footer-custom">
