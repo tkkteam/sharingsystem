@@ -82,6 +82,8 @@ func IndexHandler(c *gin.Context) {
 		alertErr = "ขออภัย: ขณะนี้ระบบยังไม่เปิดระบบรับเสนอราคาประมูลแชร์ประจำงวด!"
 	} else if errMsg == "bid_too_low" {
 		alertErr = "ขออภัย: จำนวนดอกเบี้ยเสนอประมูลต้องไม่ต่ำกว่า 200 บาท!"
+	} else if errMsg == "already_bid" {
+		alertErr = "ขออภัย: คุณได้ยื่นเสนอราคาประมูลในงวดนี้เรียบร้อยแล้ว ไม่สามารถเสนอราคาซ้ำได้!"
 	}
 
 	// Fetch current setting
@@ -940,6 +942,26 @@ func SubmitBidHandler(c *gin.Context) {
 		return
 	}
 
+	// Verify duplicate bid in current month/year
+	if isUsingSheets {
+		_, _, bids, _, err := fetchSheetsData()
+		if err == nil {
+			for _, b := range bids {
+				if b.MemberID == uint(memberID) && b.Month == month && b.Year == year {
+					c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=already_bid")
+					return
+				}
+			}
+		}
+	} else {
+		var count int64
+		DB.Model(&Bid{}).Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).Count(&count)
+		if count > 0 {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=already_bid")
+			return
+		}
+	}
+
 	// 3. Save the bid
 	if isUsingSheets {
 		if err := submitBidSheets(uint(memberID), month, year, amount); err != nil {
@@ -947,20 +969,13 @@ func SubmitBidHandler(c *gin.Context) {
 			return
 		}
 	} else {
-		var bid Bid
-		err := DB.Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).First(&bid).Error
-		if err == nil {
-			bid.Amount = amount
-			DB.Save(&bid)
-		} else {
-			DB.Create(&Bid{
-				MemberID: uint(memberID),
-				Month:    month,
-				Year:     year,
-				Amount:   amount,
-				CreatedAt: getCurrentThailandTime(),
-			})
-		}
+		DB.Create(&Bid{
+			MemberID:  uint(memberID),
+			Month:     month,
+			Year:      year,
+			Amount:    amount,
+			CreatedAt: getCurrentThailandTime(),
+		})
 	}
 
 	c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=bid_success")

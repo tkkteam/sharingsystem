@@ -345,12 +345,19 @@
                                 <td>{{ add $index 1 }}</td>
                                 <td>
                                     {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) (not $.AuctionNotStarted) }}
-                                        <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-cyber fw-bold"
-                                           data-id="{{ $row.Member.ID }}"
-                                           data-name="{{ $row.Member.Name }}"
-                                           onclick="openBidModal(this)">
-                                            {{ $row.Member.Name }}
-                                        </a>
+                                        {{ if $row.HasBid }}
+                                            <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-success fw-bold"
+                                               onclick="alertAlreadyBid()">
+                                                {{ $row.Member.Name }}
+                                            </a>
+                                        {{ else }}
+                                            <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-cyber fw-bold"
+                                               data-id="{{ $row.Member.ID }}"
+                                               data-name="{{ $row.Member.Name }}"
+                                               onclick="openBidModal(this)">
+                                                {{ $row.Member.Name }}
+                                            </a>
+                                        {{ end }}
                                     {{ else if and (not $row.Member.HasReceivedShare) (or $.AuctionClosed $.AuctionNotStarted) }}
                                         <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-secondary fw-bold"
                                            onclick="alertBiddingUnavailable()">
@@ -585,12 +592,19 @@
                                 {{ if not $row.Member.HasReceivedShare }}
                                 <div class="mb-3">
                                     {{ if and (not $.AuctionClosed) (not $.AuctionNotStarted) }}
-                                    <button type="button" class="btn btn-sm btn-cyber w-100 py-2"
-                                            data-id="{{ $row.Member.ID }}"
-                                            data-name="{{ $row.Member.Name }}"
-                                            onclick="openBidModal(this)">
-                                        <i class="bi bi-pencil-square me-1"></i> เสนอราคาประมูล
-                                    </button>
+                                        {{ if $row.HasBid }}
+                                        <button type="button" class="btn btn-sm btn-success w-100 py-2"
+                                                onclick="alertAlreadyBid()">
+                                            <i class="bi bi-shield-check me-1"></i> เสนอราคาเรียบร้อยแล้ว
+                                        </button>
+                                        {{ else }}
+                                        <button type="button" class="btn btn-sm btn-cyber w-100 py-2"
+                                                data-id="{{ $row.Member.ID }}"
+                                                data-name="{{ $row.Member.Name }}"
+                                                onclick="openBidModal(this)">
+                                            <i class="bi bi-pencil-square me-1"></i> เสนอราคาประมูล
+                                        </button>
+                                        {{ end }}
                                     {{ else }}
                                     <button type="button" class="btn btn-sm btn-secondary w-100 py-2"
                                             onclick="alertBiddingUnavailable()">
@@ -1462,6 +1476,11 @@
         } else if (closed) {
             alert("ขออภัย: หมดเขตเวลาการยื่นเสนอราคาประมูลสำหรับงวดนี้แล้ว!");
         }
+    }
+
+    // Inform user when they have already submitted a bid
+    function alertAlreadyBid() {
+        alert("ขออภัย: คุณได้ยื่นเสนอราคาประมูลในงวดนี้เรียบร้อยแล้ว ไม่สามารถเสนอราคาซ้ำได้!");
     }
 </script>
 
