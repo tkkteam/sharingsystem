@@ -65,11 +65,18 @@ func IndexHandler(c *gin.Context) {
 	sheetsURL := getSheetsURL()
 	if sheetsURL != "" {
 		var err error
-		allMembers, payments, setting, err = fetchSheetsData()
+		var allPayments []Payment
+		allMembers, allPayments, setting, err = fetchSheetsData()
 		if err != nil {
 			log.Printf("Error fetching sheets data: %v. Falling back to GORM SQLite.", err)
 		} else {
 			isUsingSheets = true
+			// Filter payments for the selected month and year
+			for _, p := range allPayments {
+				if p.Month == month && p.Year == year {
+					payments = append(payments, p)
+				}
+			}
 		}
 	}
 
