@@ -70,6 +70,7 @@ func main() {
 	r.POST("/payment/reset", ResetPaymentHandler)
 	r.POST("/winner/save", SaveWinnerHandler)
 	r.POST("/settings/update", UpdateSettingsHandler)
+	r.POST("/member/bid", SubmitBidHandler)
 
 	// Run application
 	port := os.Getenv("PORT")

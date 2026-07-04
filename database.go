@@ -32,7 +32,7 @@ func InitDB() {
 	}
 
 	// Auto Migration
-	err = DB.AutoMigrate(&Member{}, &Payment{}, &Setting{})
+	err = DB.AutoMigrate(&Member{}, &Payment{}, &Setting{}, &Bid{})
 	if err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
 	}
@@ -57,16 +57,16 @@ func InitDB() {
 
 func seedSampleData() {
 	members := []Member{
-		{Name: "นายสมชาย ดีใจ", Phone: "081-111-2222", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นางสาวสมศรี มีสุข", Phone: "082-222-3333", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นายปิติ มั่นคง", Phone: "083-333-4444", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นางชูใจ รักดี", Phone: "084-444-5555", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นายมานะ อดทน", Phone: "085-555-6666", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นางสาววีณา เสียงทอง", Phone: "086-666-7777", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นายดำรง เกียรติภูมิ", Phone: "087-777-8888", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นางสาวสมพร บุญส่ง", Phone: "088-888-9999", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นายวิชัย รวยดี", Phone: "089-999-0000", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
-		{Name: "นางนารี เลิศล้ำ", Phone: "090-000-1111", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นายสมชาย ดีใจ", Phone: "081-111-2222", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นางสาวสมศรี มีสุข", Phone: "082-222-3333", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นายปิติ มั่นคง", Phone: "083-333-4444", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นางชูใจ รักดี", Phone: "084-444-5555", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นายมานะ อดทน", Phone: "085-555-6666", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นางสาววีณา เสียงทอง", Phone: "086-666-7777", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นายดำรง เกียรติภูมิ", Phone: "087-777-8888", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นางสาวสมพร บุญส่ง", Phone: "088-888-9999", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นายวิชัย รวยดี", Phone: "089-999-0000", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
+		{Name: "นางนารี เลิศล้ำ", Phone: "090-000-1111", BidPassword: "1234", HasReceivedShare: false, InterestAmount: 0, CreatedAt: time.Now()},
 	}
 
 	// Save members

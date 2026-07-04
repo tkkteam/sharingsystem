@@ -18,6 +18,8 @@ type MemberRow struct {
 	Payment          Payment
 	NextPaymentValue float64
 	WinnerNumber     int
+	BidAmount        float64
+	HasBid           bool
 }
 
 // MonthSummary represents the monthly financial summary report
@@ -57,6 +59,8 @@ func IndexHandler(c *gin.Context) {
 		alertMsg = "ออกจากระบบเรียบร้อยแล้ว"
 	} else if msg == "reset_success" {
 		alertMsg = "รีเซ็ตสถานะการชำระเงินของงวดนี้เป็น 'ยังไม่ชำระ' สำเร็จ!"
+	} else if msg == "bid_success" {
+		alertMsg = "เสนอราคายอดดอกเบี้ยประมูลสำเร็จเรียบร้อยแล้ว!"
 	}
 
 	var alertErr string
@@ -64,6 +68,14 @@ func IndexHandler(c *gin.Context) {
 		alertErr = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง"
 	} else if errMsg == "unauthorized" {
 		alertErr = "เกิดข้อผิดพลาด: สิทธิ์การใช้งานนี้ถูกจำกัดเฉพาะผู้ดูแลระบบ (Admin) เท่านั้น!"
+	} else if errMsg == "invalid_pin" {
+		alertErr = "รหัสผ่านประมูล (PIN) ของสมาชิกไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง!"
+	} else if errMsg == "bid_deadline_passed" {
+		alertErr = "ขออภัย: หมดเวลาเสนอราคาประมูลสำหรับงวดนี้แล้ว (เกินกำหนดเวลาประมูล)!"
+	} else if errMsg == "invalid_bid_amount" {
+		alertErr = "จำนวนดอกเบี้ยประมูลที่เสนอไม่ถูกต้อง!"
+	} else if errMsg == "already_received" {
+		alertErr = "สมาชิกคนนี้ได้รับแชร์ในอดีตไปแล้ว ไม่สามารถเสนอราคาประมูลได้อีก!"
 	}
 
 	// Fetch current setting
@@ -71,12 +83,14 @@ func IndexHandler(c *gin.Context) {
 	var allMembers []Member
 	var payments []Payment
 	var allPayments []Payment
+	var allBids []Bid
+	var monthBids []Bid
 	var isUsingSheets bool
 
 	sheetsURL := getSheetsURL()
 	if sheetsURL != "" {
 		var err error
-		allMembers, allPayments, setting, err = fetchSheetsData()
+		allMembers, allPayments, allBids, setting, err = fetchSheetsData()
 		if err != nil {
 			log.Printf("Error fetching sheets data: %v. Falling back to GORM SQLite.", err)
 		} else {
@@ -85,6 +99,12 @@ func IndexHandler(c *gin.Context) {
 			for _, p := range allPayments {
 				if p.Month == month && p.Year == year {
 					payments = append(payments, p)
+				}
+			}
+			// Filter bids for the selected month and year
+			for _, b := range allBids {
+				if b.Month == month && b.Year == year {
+					monthBids = append(monthBids, b)
 				}
 			}
 		}
@@ -115,6 +135,10 @@ func IndexHandler(c *gin.Context) {
 		DB.Where("month = ? AND year = ?", month, year).Find(&payments)
 		// Fetch all payments for this year (for report)
 		DB.Where("year = ?", year).Find(&allPayments)
+		// Fetch month bids
+		DB.Where("month = ? AND year = ?", month, year).Find(&monthBids)
+		// Fetch all bids
+		DB.Find(&allBids)
 	}
 
 	// Fetch members matching search (or all)
@@ -142,6 +166,12 @@ func IndexHandler(c *gin.Context) {
 	paymentMap := make(map[uint]Payment)
 	for _, p := range payments {
 		paymentMap[p.MemberID] = p
+	}
+
+	// Map bids by MemberID
+	bidMap := make(map[uint]Bid)
+	for _, b := range monthBids {
+		bidMap[b.MemberID] = b
 	}
 
 	// Fetch all winners sorted chronologically to determine their sequence number
@@ -210,11 +240,19 @@ func IndexHandler(c *gin.Context) {
 
 		winnerNum := winnerNumberMap[m.ID]
 
+		b, hasBid := bidMap[m.ID]
+		bidAmount := 0.0
+		if hasBid {
+			bidAmount = b.Amount
+		}
+
 		rows = append(rows, MemberRow{
 			Member:           m,
 			Payment:          payment,
 			NextPaymentValue: nextPayment,
 			WinnerNumber:     winnerNum,
+			BidAmount:        bidAmount,
+			HasBid:           hasBid,
 		})
 	}
 
@@ -298,6 +336,17 @@ func IndexHandler(c *gin.Context) {
 		yearlyTotalCollected += total
 	}
 
+	// Calculate auction status
+	auctionClosed := false
+	auctionDeadlineStr := ""
+	if setting.AuctionDeadline != nil {
+		auctionDeadlineStr = setting.AuctionDeadline.Format(time.RFC3339)
+		nowThai := getCurrentThailandTime()
+		if nowThai.After(*setting.AuctionDeadline) {
+			auctionClosed = true
+		}
+	}
+
 	c.HTML(http.StatusOK, "index.html", gin.H{
 		"Rows":                 rows,
 		"TotalMembers":         len(allMembers),
@@ -320,6 +369,8 @@ func IndexHandler(c *gin.Context) {
 		"YearlyTotalPrincipal": yearlyTotalPrincipal,
 		"YearlyTotalInterest":  yearlyTotalInterest,
 		"YearlyTotalCollected": yearlyTotalCollected,
+		"AuctionClosed":        auctionClosed,
+		"AuctionDeadlineStr":   auctionDeadlineStr,
 	})
 }
 
@@ -331,13 +382,14 @@ func AddMemberHandler(c *gin.Context) {
 	}
 	name := c.PostForm("name")
 	phone := c.PostForm("phone")
+	bidPassword := c.PostForm("bid_password")
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ชื่อสมาชิกห้ามว่าง"})
 		return
 	}
 
 	if getSheetsURL() != "" {
-		if err := addMemberSheets(name, phone); err != nil {
+		if err := addMemberSheets(name, phone, bidPassword); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add member to Google Sheets"})
 			return
 		}
@@ -348,6 +400,7 @@ func AddMemberHandler(c *gin.Context) {
 	newMember := Member{
 		Name:             name,
 		Phone:            phone,
+		BidPassword:      bidPassword,
 		HasReceivedShare: false,
 		InterestAmount:   0,
 		CreatedAt:        time.Now(),
@@ -380,6 +433,7 @@ func UpdateMemberHandler(c *gin.Context) {
 	idStr := c.PostForm("id")
 	name := c.PostForm("name")
 	phone := c.PostForm("phone")
+	bidPassword := c.PostForm("bid_password")
 	hasReceivedShareStr := c.PostForm("has_received_share")
 	interestAmountStr := c.PostForm("interest_amount")
 
@@ -393,7 +447,7 @@ func UpdateMemberHandler(c *gin.Context) {
 	}
 
 	if getSheetsURL() != "" {
-		allM, _, _, err := fetchSheetsData()
+		allM, _, _, _, err := fetchSheetsData()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch from Google Sheets"})
 			return
@@ -414,6 +468,7 @@ func UpdateMemberHandler(c *gin.Context) {
 
 		member.Name = name
 		member.Phone = phone
+		member.BidPassword = bidPassword
 		member.HasReceivedShare = (hasReceivedShareStr == "true" || hasReceivedShareStr == "on")
 		
 		if member.HasReceivedShare {
@@ -450,6 +505,7 @@ func UpdateMemberHandler(c *gin.Context) {
 
 	member.Name = name
 	member.Phone = phone
+	member.BidPassword = bidPassword
 	member.HasReceivedShare = (hasReceivedShareStr == "true" || hasReceivedShareStr == "on")
 	
 	if member.HasReceivedShare {
@@ -533,7 +589,7 @@ func SaveWinnerHandler(c *gin.Context) {
 	}
 
 	if getSheetsURL() != "" {
-		allM, _, _, err := fetchSheetsData()
+		allM, _, _, _, err := fetchSheetsData()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch from Google Sheets"})
 			return
@@ -648,8 +704,22 @@ func UpdateSettingsHandler(c *gin.Context) {
 		return
 	}
 
+	deadlineStr := c.PostForm("auction_deadline")
+	var deadline *time.Time = nil
+	if deadlineStr != "" {
+		loc, _ := time.LoadLocation("Asia/Bangkok")
+		if t, err := time.ParseInLocation("2006-01-02T15:04", deadlineStr, loc); err == nil {
+			deadline = &t
+		} else {
+			if t, err := time.Parse("2006-01-02T15:04", deadlineStr); err == nil {
+				tThai := t.Add(-7 * time.Hour)
+				deadline = &tThai
+			}
+		}
+	}
+
 	if getSheetsURL() != "" {
-		if err := updateSettingsSheets(monthlyAmount); err != nil {
+		if err := updateSettingsSheets(monthlyAmount, deadline); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update settings on Google Sheets"})
 			return
 		}
@@ -659,10 +729,11 @@ func UpdateSettingsHandler(c *gin.Context) {
 
 	var setting Setting
 	if err := DB.First(&setting, 1).Error; err != nil {
-		setting = Setting{ID: 1, MonthlyAmount: monthlyAmount, UpdatedAt: time.Now()}
+		setting = Setting{ID: 1, MonthlyAmount: monthlyAmount, AuctionDeadline: deadline, UpdatedAt: time.Now()}
 		DB.Create(&setting)
 	} else {
 		setting.MonthlyAmount = monthlyAmount
+		setting.AuctionDeadline = deadline
 		setting.UpdatedAt = time.Now()
 		DB.Save(&setting)
 	}
@@ -729,4 +800,111 @@ func getCurrentThailandTime() time.Time {
 	}
 	// Fallback to manual UTC + 7 offset
 	return time.Now().UTC().Add(7 * time.Hour)
+}
+
+// SubmitBidHandler handles POST /member/bid
+func SubmitBidHandler(c *gin.Context) {
+	memberIDStr := c.PostForm("member_id")
+	pin := c.PostForm("pin")
+	amountStr := c.PostForm("amount")
+	monthStr := c.PostForm("month")
+	yearStr := c.PostForm("year")
+
+	memberID, err := strconv.ParseUint(memberIDStr, 10, 32)
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/?error=invalid_member")
+		return
+	}
+
+	month, _ := strconv.Atoi(monthStr)
+	year, _ := strconv.Atoi(yearStr)
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil || amount < 0 {
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=invalid_bid_amount")
+		return
+	}
+
+	// 1. Fetch setting and verify deadline
+	var setting Setting
+	isUsingSheets := (getSheetsURL() != "")
+	if isUsingSheets {
+		_, _, _, s, err := fetchSheetsData()
+		if err == nil {
+			setting = s
+		}
+	} else {
+		DB.First(&setting, 1)
+	}
+
+	if setting.AuctionDeadline != nil {
+		nowThai := getCurrentThailandTime()
+		if nowThai.After(*setting.AuctionDeadline) {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=bid_deadline_passed")
+			return
+		}
+	}
+
+	// 2. Fetch member and verify pin
+	var member Member
+	if isUsingSheets {
+		allM, _, _, _, err := fetchSheetsData()
+		if err != nil {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=db_error")
+			return
+		}
+		found := false
+		for _, m := range allM {
+			if m.ID == uint(memberID) {
+				member = m
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=member_not_found")
+			return
+		}
+	} else {
+		if err := DB.First(&member, memberID).Error; err != nil {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=member_not_found")
+			return
+		}
+	}
+
+	// Verify password
+	if member.BidPassword != pin {
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=invalid_pin")
+		return
+	}
+
+	// Member cannot bid if they already received the share!
+	if member.HasReceivedShare {
+		c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=already_received")
+		return
+	}
+
+	// 3. Save the bid
+	if isUsingSheets {
+		if err := submitBidSheets(uint(memberID), month, year, amount); err != nil {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=save_error")
+			return
+		}
+	} else {
+		var bid Bid
+		err := DB.Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).First(&bid).Error
+		if err == nil {
+			bid.Amount = amount
+			DB.Save(&bid)
+		} else {
+			DB.Create(&Bid{
+				MemberID: uint(memberID),
+				Month:    month,
+				Year:     year,
+				Amount:   amount,
+				CreatedAt: getCurrentThailandTime(),
+			})
+		}
+	}
+
+	c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=bid_success")
 }

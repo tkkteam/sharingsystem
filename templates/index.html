@@ -81,6 +81,25 @@
         </div>
     </div>
 
+    <!-- Countdown Timer Banner -->
+    {{ if .Setting.AuctionDeadline }}
+    <div class="glass-card p-3 mb-4 animate-fade-in d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: rgba(255, 193, 7, 0.08); border-left: 4px solid var(--warning-color); animation-delay: 0.05s;">
+        <div class="d-flex align-items-center">
+            <div class="stat-icon stat-orange me-3" style="font-size: 1.25rem; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px;">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+                <div class="text-secondary fs-7">สิ้นสุดการประมูลเสนอราคา</div>
+                <div class="fw-bold text-dark fs-6" id="deadline-time-text"></div>
+            </div>
+        </div>
+        <div class="text-end">
+            <div class="text-secondary fs-7">เวลาประมูลเสนอราคาคงเหลือ</div>
+            <div class="fs-4 fw-bold text-warning" id="countdown-timer">กำลังคำนวณ...</div>
+        </div>
+    </div>
+    {{ end }}
+
     <!-- Dashboard Row -->
     <div class="row g-3 mb-4 animate-fade-in" style="animation-delay: 0.1s;">
         <!-- Card 1: Total Members -->
@@ -227,9 +246,10 @@
                 <thead>
                     <tr>
                         <th style="width: 5%;">#</th>
-                        <th style="width: 25%;">ชื่อสมาชิก</th>
+                        <th style="width: 20%;">ชื่อสมาชิก</th>
                         <th style="width: 15%;">เบอร์โทรศัพท์</th>
-                        <th style="width: 15%;">ดอกเบี้ยประมูล</th>
+                        <th style="width: 15%; text-align: center;">เสนอประมูล</th>
+                        <th style="width: 15%;">ดอกเบี้ยชนะ</th>
                         <th style="width: 15%;">ยอดต้องจ่ายงวดนี้</th>
                         <th style="width: 15%; text-align: center;">สถานะชำระเงิน</th>
                         {{ if $.IsAdmin }}
@@ -243,12 +263,40 @@
                             <tr class="member-row" data-name="{{ $row.Member.Name }}" data-phone="{{ $row.Member.Phone }}">
                                 <td>{{ add $index 1 }}</td>
                                 <td>
-                                    <span class="fw-bold">{{ $row.Member.Name }}</span>
+                                    {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) }}
+                                        <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-cyber fw-bold"
+                                           data-id="{{ $row.Member.ID }}"
+                                           data-name="{{ $row.Member.Name }}"
+                                           onclick="openBidModal(this)">
+                                            {{ $row.Member.Name }}
+                                        </a>
+                                    {{ else }}
+                                        <span class="fw-bold text-dark">{{ $row.Member.Name }}</span>
+                                    {{ end }}
                                     {{ if $row.Member.HasReceivedShare }}
                                         <span class="badge-winner ms-1"><i class="bi bi-trophy-fill"></i> ได้แชร์แล้ว คนที่ {{ $row.WinnerNumber }}</span>
                                     {{ end }}
                                 </td>
                                 <td><i class="bi bi-telephone text-secondary me-1"></i>{{ if $row.Member.Phone }}{{ $row.Member.Phone }}{{ else }}-{{ end }}</td>
+                                <td style="text-align: center;">
+                                    {{ if $row.Member.HasReceivedShare }}
+                                        <span class="text-secondary">-</span>
+                                    {{ else }}
+                                        {{ if $row.HasBid }}
+                                            {{ if or $.IsAdmin $.AuctionClosed }}
+                                                <span class="badge bg-info-subtle text-info fs-7">{{ $row.BidAmount | formatMoney }} ฿</span>
+                                            {{ else }}
+                                                <span class="badge bg-success-subtle text-success fs-7" title="เสนอราคาแล้วแต่ยังไม่เปิดเผยยอด"><i class="bi bi-shield-check me-1"></i>เสนอแล้ว</span>
+                                            {{ end }}
+                                        {{ else }}
+                                            {{ if $.AuctionClosed }}
+                                                <span class="badge bg-danger-subtle text-danger fs-7"><i class="bi bi-x-circle me-1"></i>สละสิทธิ์</span>
+                                            {{ else }}
+                                                <span class="badge bg-secondary-subtle text-secondary fs-7">ยังไม่เสนอ</span>
+                                            {{ end }}
+                                        {{ end }}
+                                    {{ end }}
+                                </td>
                                 <td>
                                     {{ if $row.Member.HasReceivedShare }}
                                         <span class="text-warning fw-bold">{{ $row.Member.InterestAmount | formatMoney }} ฿</span>
@@ -303,6 +351,7 @@
                                                 data-id="{{ $row.Member.ID }}"
                                                 data-name="{{ $row.Member.Name }}"
                                                 data-phone="{{ $row.Member.Phone }}"
+                                                data-bid-password="{{ $row.Member.BidPassword }}"
                                                 data-has-received="{{ $row.Member.HasReceivedShare }}"
                                                 data-interest="{{ $row.Member.InterestAmount }}"
                                                 data-received-month="{{ $row.Member.ReceivedMonth }}"
@@ -358,15 +407,37 @@
                                 
                                 <!-- Info Row -->
                                 <div class="row g-2 my-2 py-2 border-top border-bottom border-light-subtle">
-                                    <div class="col-6">
-                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ดอกเบี้ยประมูล</small>
-                                        <span class="fw-bold {{ if $row.Member.HasReceivedShare }}text-warning{{ else }}text-dark{{ end }}">
+                                    <div class="col-4">
+                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ดอกเบี้ยชนะ</small>
+                                        <span class="fw-bold {{ if $row.Member.HasReceivedShare }}text-warning{{ else }}text-dark{{ end }}" style="font-size: 0.85rem;">
                                             {{ if $row.Member.HasReceivedShare }}{{ $row.Member.InterestAmount | formatMoney }} ฿{{ else }}-{{ end }}
                                         </span>
                                     </div>
-                                    <div class="col-6">
-                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ยอดต้องจ่ายงวดนี้</small>
-                                        <span class="fw-bold text-info fs-5">{{ $row.NextPaymentValue | formatMoney }} ฿</span>
+                                    <div class="col-4 text-center">
+                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">เสนอประมูล</small>
+                                        <span class="fw-bold" style="font-size: 0.85rem;">
+                                            {{ if $row.Member.HasReceivedShare }}
+                                                <span class="text-secondary fs-7">-</span>
+                                            {{ else }}
+                                                {{ if $row.HasBid }}
+                                                    {{ if or $.IsAdmin $.AuctionClosed }}
+                                                        <span class="text-info fs-7">{{ $row.BidAmount | formatMoney }} ฿</span>
+                                                    {{ else }}
+                                                        <span class="text-success fs-7" style="font-size: 0.75rem;"><i class="bi bi-shield-check"></i> เสนอแล้ว</span>
+                                                    {{ end }}
+                                                {{ else }}
+                                                    {{ if $.AuctionClosed }}
+                                                        <span class="text-danger fs-7" style="font-size: 0.75rem;"><i class="bi bi-x-circle"></i> สละสิทธิ์</span>
+                                                    {{ else }}
+                                                        <span class="text-secondary fs-7">ยังไม่เสนอ</span>
+                                                    {{ end }}
+                                                {{ end }}
+                                            {{ end }}
+                                        </span>
+                                    </div>
+                                    <div class="col-4 text-end">
+                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ยอดต้องจ่าย</small>
+                                        <span class="fw-bold text-info" style="font-size: 0.85rem;">{{ $row.NextPaymentValue | formatMoney }} ฿</span>
                                     </div>
                                 </div>
                                 
@@ -401,6 +472,18 @@
                                         </div>
                                     {{ end }}
                                 </div>
+
+                                <!-- Bidding Button for Member -->
+                                {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) }}
+                                <div class="mb-3">
+                                    <button type="button" class="btn btn-sm btn-cyber w-100 py-2"
+                                            data-id="{{ $row.Member.ID }}"
+                                            data-name="{{ $row.Member.Name }}"
+                                            onclick="openBidModal(this)">
+                                        <i class="bi bi-pencil-square me-1"></i> เสนอราคาประมูล
+                                    </button>
+                                </div>
+                                {{ end }}
                                 
                                 <!-- Action Buttons -->
                                 {{ if $.IsAdmin }}
@@ -410,6 +493,7 @@
                                             data-id="{{ $row.Member.ID }}"
                                             data-name="{{ $row.Member.Name }}"
                                             data-phone="{{ $row.Member.Phone }}"
+                                            data-bid-password="{{ $row.Member.BidPassword }}"
                                             data-has-received="{{ $row.Member.HasReceivedShare }}"
                                             data-interest="{{ $row.Member.InterestAmount }}"
                                             data-received-month="{{ $row.Member.ReceivedMonth }}"
@@ -494,6 +578,46 @@
     </div>
 </div>
 
+<!-- Modal: เสนอราคาประมูล (Submit Bid) -->
+<div class="modal fade" id="bidModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="/member/bid" method="POST">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-cyan"></i>เสนอราคาประมูลแชร์</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="member_id" id="bid-member-id">
+                    <input type="hidden" name="month" value="{{ .Month }}">
+                    <input type="hidden" name="year" value="{{ .Year }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">ชื่อผู้เสนอราคา</label>
+                        <input type="text" id="bid-member-name" class="form-control form-control-custom text-white fw-bold" style="background: rgba(255,255,255,0.05);" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">รหัสผ่านประมูล (PIN)</label>
+                        <input type="password" name="pin" class="form-control form-control-custom" placeholder="กรอก PIN ของคุณ..." required autocomplete="off">
+                        <div class="form-text text-secondary mt-1">รหัสความปลอดภัยที่ออกโดยแอดมิน เพื่อใช้ระบุตัวตนในการเสนอราคา</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">ดอกเบี้ยประมูลที่เสนอ (บาท)</label>
+                        <input type="number" name="amount" class="form-control form-control-custom" placeholder="เช่น 200" min="0" required>
+                        <div class="form-text text-secondary mt-1">เสนอได้เพียง 1 ครั้งในงวดนี้ และไม่สามารถเปิดเผยยอดจนกว่าจะหมดเวลาประมูล</div>
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-cyber">ส่งเสนอราคา</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Modal: เพิ่มสมาชิก (Add Member) -->
 <div class="modal fade" id="addMemberModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -511,6 +635,11 @@
                     <div class="mb-3">
                         <label class="form-label text-secondary">เบอร์โทรศัพท์</label>
                         <input type="text" name="phone" class="form-control form-control-custom" placeholder="กรอกเบอร์โทรศัพท์ เช่น 082-222-3333" oninput="formatPhoneNumber(this)" maxlength="12">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">รหัสผ่านประมูล (PIN)</label>
+                        <input type="text" name="bid_password" class="form-control form-control-custom" placeholder="กรอกรหัส PIN เช่น 1234" required>
+                        <div class="form-text text-secondary mt-1">รหัสความปลอดภัยสำหรับสมาชิกลงคะแนนเสนอราคาประมูลแชร์</div>
                     </div>
                 </div>
                 <div class="modal-footer modal-footer-custom">
@@ -542,6 +671,11 @@
                     <div class="mb-3">
                         <label class="form-label text-secondary">เบอร์โทรศัพท์</label>
                         <input type="text" name="phone" id="edit-phone" class="form-control form-control-custom" oninput="formatPhoneNumber(this)" maxlength="12">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">รหัสผ่านประมูล (PIN)</label>
+                        <input type="text" name="bid_password" id="edit-bid-password" class="form-control form-control-custom" placeholder="กรอกรหัส PIN" required>
                     </div>
 
                     <div class="form-check form-switch mb-3">
@@ -630,6 +764,11 @@
                         <label class="form-label text-secondary">จำนวนเงินค่าส่งแชร์พื้นฐาน (บาท / สมาชิก / เดือน)</label>
                         <input type="number" name="monthly_amount" value="{{ .Setting.MonthlyAmount }}" class="form-control form-control-custom" min="1" required>
                         <div class="form-text text-secondary mt-1">ค่าเริ่มต้นคือ 1,000 บาท สามารถเปลี่ยนได้ที่นี่</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">เวลาสิ้นสุดการประมูลเสนอราคางวดนี้</label>
+                        <input type="datetime-local" name="auction_deadline" id="settings-auction-deadline" class="form-control form-control-custom">
+                        <div class="form-text text-secondary mt-1">กำหนดวันและเวลาที่หมดเขตประมูล (สมาชิกลูกแชร์ที่ยังไม่ได้รับแชร์จะไม่สามารถประมูลได้หลังจากเวลานี้)</div>
                     </div>
                 </div>
                 <div class="modal-footer modal-footer-custom">
@@ -817,6 +956,7 @@
         }
         
         document.getElementById('edit-interest').value = btn.getAttribute('data-interest');
+        document.getElementById('edit-bid-password').value = btn.getAttribute('data-bid-password') || '';
         
         var modalEl = document.getElementById('editMemberModal');
         var editModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
@@ -1074,6 +1214,70 @@
     document.addEventListener('DOMContentLoaded', function() {
         filterMembersRealtime();
     });
+
+    // Countdown Timer logic if deadline is set
+    {{ if .Setting.AuctionDeadline }}
+    (function() {
+        var deadlineStr = "{{ .AuctionDeadlineStr }}";
+        var deadline = new Date(deadlineStr);
+        
+        // Format Thai Deadline Text
+        var options = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        var timeEl = document.getElementById('deadline-time-text');
+        if (timeEl) {
+            timeEl.innerText = deadline.toLocaleDateString('th-TH', options) + ' น.';
+        }
+        
+        function updateCountdown() {
+            var now = new Date();
+            var diff = deadline - now;
+            var timerEl = document.getElementById('countdown-timer');
+            if (!timerEl) return;
+            
+            if (diff <= 0) {
+                timerEl.innerText = "หมดเวลาการประมูล (สละสิทธิ์สำหรับผู้ที่ยังไม่ได้เสนอราคา)";
+                timerEl.className = "fs-5 fw-bold text-danger animate-pulse";
+                clearInterval(timerInterval);
+                return;
+            }
+            
+            var hours = Math.floor(diff / (1000 * 60 * 60));
+            var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            timerEl.innerText = hours + " ชั่วโมง " + minutes + " นาที " + seconds + " วินาที";
+        }
+        
+        var timerInterval = setInterval(updateCountdown, 1000);
+        updateCountdown();
+    })();
+    
+    // Set Settings Modal Deadline Input Default Value
+    try {
+        var deadlineVal = new Date("{{ .AuctionDeadlineStr }}");
+        var year = deadlineVal.getFullYear();
+        var month = String(deadlineVal.getMonth() + 1).padStart(2, '0');
+        var day = String(deadlineVal.getDate()).padStart(2, '0');
+        var hours = String(deadlineVal.getHours()).padStart(2, '0');
+        var minutes = String(deadlineVal.getMinutes()).padStart(2, '0');
+        var deadlineInput = document.getElementById('settings-auction-deadline');
+        if (deadlineInput) {
+            deadlineInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+    } catch(e) {
+        console.error("Error formatting deadline input:", e);
+    }
+    {{ end }}
+
+    // Open Bid Modal Helper
+    function openBidModal(link) {
+        document.getElementById('bid-member-id').value = link.getAttribute('data-id');
+        document.getElementById('bid-member-name').value = link.getAttribute('data-name');
+        
+        var modalEl = document.getElementById('bidModal');
+        var bidModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        bidModal.show();
+    }
 </script>
 
 </body>

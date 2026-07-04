@@ -13,8 +13,10 @@ import (
 type SheetsResponse struct {
 	Members  []Member  `json:"members"`
 	Payments []Payment `json:"payments"`
+	Bids     []Bid     `json:"bids"`
 	Setting  struct {
-		MonthlyAmount float64 `json:"MonthlyAmount"`
+		MonthlyAmount   float64    `json:"MonthlyAmount"`
+		AuctionDeadline *time.Time `json:"AuctionDeadline"`
 	} `json:"setting"`
 }
 
@@ -22,34 +24,35 @@ func getSheetsURL() string {
 	return os.Getenv("SHEETS_API_URL")
 }
 
-func fetchSheetsData() ([]Member, []Payment, Setting, error) {
+func fetchSheetsData() ([]Member, []Payment, []Bid, Setting, error) {
 	url := getSheetsURL()
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, nil, Setting{}, err
+		return nil, nil, nil, Setting{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, Setting{}, fmt.Errorf("bad status code: %d", resp.StatusCode)
+		return nil, nil, nil, Setting{}, fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, Setting{}, err
+		return nil, nil, nil, Setting{}, err
 	}
 
 	var sr SheetsResponse
 	if err := json.Unmarshal(bodyBytes, &sr); err != nil {
-		return nil, nil, Setting{}, err
+		return nil, nil, nil, Setting{}, err
 	}
 
 	s := Setting{
-		MonthlyAmount: sr.Setting.MonthlyAmount,
-		UpdatedAt:     time.Now(),
+		MonthlyAmount:   sr.Setting.MonthlyAmount,
+		AuctionDeadline: sr.Setting.AuctionDeadline,
+		UpdatedAt:       time.Now(),
 	}
 
-	return sr.Members, sr.Payments, s, nil
+	return sr.Members, sr.Payments, sr.Bids, s, nil
 }
 
 func sheetsPost(payload interface{}) error {
@@ -70,11 +73,12 @@ func sheetsPost(payload interface{}) error {
 	return nil
 }
 
-func addMemberSheets(name, phone string) error {
+func addMemberSheets(name, phone, bidPassword string) error {
 	payload := map[string]interface{}{
-		"action": "add_member",
-		"name":   name,
-		"phone":  phone,
+		"action":       "add_member",
+		"name":         name,
+		"phone":        phone,
+		"bid_password": bidPassword,
 	}
 	return sheetsPost(payload)
 }
@@ -120,10 +124,22 @@ func resetPaymentSheets(month, year int) error {
 	return sheetsPost(payload)
 }
 
-func updateSettingsSheets(monthlyAmount float64) error {
+func updateSettingsSheets(monthlyAmount float64, deadline *time.Time) error {
 	payload := map[string]interface{}{
 		"action":         "update_settings",
 		"monthly_amount": monthlyAmount,
+		"deadline":       deadline,
+	}
+	return sheetsPost(payload)
+}
+
+func submitBidSheets(memberID uint, month, year int, amount float64) error {
+	payload := map[string]interface{}{
+		"action":    "submit_bid",
+		"member_id": memberID,
+		"month":     month,
+		"year":      year,
+		"amount":    amount,
 	}
 	return sheetsPost(payload)
 }
