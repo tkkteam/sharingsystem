@@ -268,8 +268,11 @@ function doPost(e) {
         new Date().toISOString()
       ]);
     }
+    return makeResponse({ success: true });
+  }
+  
   // ลบข้อมูลประมูล (Delete Bid)
-  if (action === "delete_bid") {
+  else if (action === "delete_bid") {
     var memberId = parseInt(postData.member_id);
     var month = parseInt(postData.month);
     var year = parseInt(postData.year);
