@@ -161,13 +161,22 @@
                     </div>
                 </div>
                 {{ if .IsAdmin }}
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
                     <button class="btn btn-cyber" data-bs-toggle="modal" data-bs-target="#winnerModal">
                         <i class="bi bi-award-fill me-1"></i> บันทึกผู้ได้รับแชร์
                     </button>
-                    <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#randomWinnerModal">
-                        <i class="bi bi-shuffle me-1"></i> สุ่มจับฉลาก
-                    </button>
+                    
+                    {{ $everyonePaid := and (eq .UnpaidCount 0) (gt .TotalMembers 0) }}
+                    {{ if $everyonePaid }}
+                        <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#randomWinnerModal">
+                            <i class="bi bi-shuffle me-1"></i> สุ่มจับฉลาก
+                        </button>
+                    {{ else }}
+                        <button class="btn btn-warning text-dark fw-bold" disabled style="opacity: 0.65; cursor: not-allowed;" title="กรุณาให้สมาชิกทุกคนชำระเงินให้ครบเรียบร้อยก่อนทำการจับฉลาก (เหลือยังไม่จ่าย {{ .UnpaidCount }} คน)">
+                            <i class="bi bi-lock-fill me-1"></i> สุ่มจับฉลาก (รอจ่ายครบ)
+                        </button>
+                    {{ end }}
+                    
                     <button class="btn btn-cyber-outline" data-bs-toggle="modal" data-bs-target="#settingsModal">
                         <i class="bi bi-gear-fill me-1"></i> แก้ไขค่าส่งรายเดือน
                     </button>
