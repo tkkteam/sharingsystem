@@ -147,3 +147,13 @@ func submitBidSheets(memberID uint, month, year int, amount float64) error {
 	}
 	return sheetsPost(payload)
 }
+
+func deleteBidSheets(memberID uint, month, year int) error {
+	payload := map[string]interface{}{
+		"action":    "delete_bid",
+		"member_id": memberID,
+		"month":     month,
+		"year":      year,
+	}
+	return sheetsPost(payload)
+}

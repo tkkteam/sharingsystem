@@ -268,6 +268,17 @@ function doPost(e) {
         new Date().toISOString()
       ]);
     }
+  // ลบข้อมูลประมูล (Delete Bid)
+  if (action === "delete_bid") {
+    var memberId = parseInt(postData.member_id);
+    var month = parseInt(postData.month);
+    var year = parseInt(postData.year);
+    var data = bidsSheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (parseInt(data[i][1]) === memberId && parseInt(data[i][2]) === month && parseInt(data[i][3]) === year) {
+        bidsSheet.deleteRow(i + 1);
+      }
+    }
     return makeResponse({ success: true });
   }
 

@@ -61,6 +61,8 @@ func IndexHandler(c *gin.Context) {
 		alertMsg = "รีเซ็ตสถานะการชำระเงินของงวดนี้เป็น 'ยังไม่ชำระ' สำเร็จ!"
 	} else if msg == "bid_success" {
 		alertMsg = "เสนอราคายอดดอกเบี้ยประมูลสำเร็จเรียบร้อยแล้ว!"
+	} else if msg == "bid_deleted" {
+		alertMsg = "ลบการเสนอราคาประมูลเรียบร้อยแล้ว!"
 	}
 
 	var alertErr string
@@ -962,4 +964,36 @@ func SubmitBidHandler(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=bid_success")
+}
+
+// DeleteBidHandler handles POST /member/bid/delete
+func DeleteBidHandler(c *gin.Context) {
+	if !isAdmin(c) {
+		c.Redirect(http.StatusSeeOther, "/?error=unauthorized")
+		return
+	}
+	memberIDStr := c.PostForm("member_id")
+	monthStr := c.PostForm("month")
+	yearStr := c.PostForm("year")
+
+	memberID, err := strconv.ParseUint(memberIDStr, 10, 32)
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/?error=invalid_member")
+		return
+	}
+
+	month, _ := strconv.Atoi(monthStr)
+	year, _ := strconv.Atoi(yearStr)
+
+	isUsingSheets := (getSheetsURL() != "")
+	if isUsingSheets {
+		if err := deleteBidSheets(uint(memberID), month, year); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete bid from Google Sheets"})
+			return
+		}
+	} else {
+		DB.Where("member_id = ? AND month = ? AND year = ?", memberID, month, year).Delete(&Bid{})
+	}
+
+	c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&msg=bid_deleted")
 }

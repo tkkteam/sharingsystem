@@ -257,10 +257,23 @@
                             </td>
                             {{ if $.IsAdmin }}
                             <td style="text-align: center;">
-                                <button type="button" class="btn btn-sm btn-warning text-dark fw-bold px-3 py-1"
-                                        onclick="selectWinnerFromBid('{{ $bid.MemberID }}', '{{ $bid.Amount }}')">
-                                    <i class="bi bi-check-circle-fill me-1"></i> ยืนยันผลรับแชร์
-                                </button>
+                                <div class="d-flex justify-content-center gap-2">
+                                    {{ if eq $bIdx 0 }}
+                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold px-3 py-1"
+                                            onclick="selectWinnerFromBid('{{ $bid.MemberID }}', '{{ $bid.Amount }}')">
+                                        <i class="bi bi-check-circle-fill me-1"></i> ยืนยันผลรับแชร์
+                                    </button>
+                                    {{ end }}
+                                    
+                                    <form action="/member/bid/delete" method="POST" class="m-0" onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะลบการเสนอราคานี้ของ {{ $bid.Member.Name }}?');">
+                                        <input type="hidden" name="member_id" value="{{ $bid.MemberID }}">
+                                        <input type="hidden" name="month" value="{{ $.Month }}">
+                                        <input type="hidden" name="year" value="{{ $.Year }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" title="ลบการเสนอราคา (ถอนตัว)">
+                                            <i class="bi bi-trash"></i> ลบประมูล
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                             {{ end }}
                         </tr>

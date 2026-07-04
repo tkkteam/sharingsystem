@@ -71,6 +71,7 @@ func main() {
 	r.POST("/winner/save", SaveWinnerHandler)
 	r.POST("/settings/update", UpdateSettingsHandler)
 	r.POST("/member/bid", SubmitBidHandler)
+	r.POST("/member/bid/delete", DeleteBidHandler)
 
 	// Run application
 	port := os.Getenv("PORT")
