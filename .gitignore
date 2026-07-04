@@ -1,0 +1,17 @@
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# OS files
+.DS_Store
+Thumbs.db

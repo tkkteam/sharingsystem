@@ -1,0 +1,322 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --bg-main: #f3f7fa;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --border-color: rgba(15, 23, 42, 0.08);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --accent-cyan: #0284c7; /* Sky Blue */
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-orange: #f59e0b;
+    --accent-purple: #8b5cf6;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: 'Prompt', sans-serif;
+    min-height: 100vh;
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.12) 0px, transparent 50%);
+    background-attachment: fixed;
+    -webkit-tap-highlight-color: transparent; /* Remove touch highlight on mobile */
+}
+
+.glass-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(100, 116, 139, 0.1), 0 8px 10px -6px rgba(100, 116, 139, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    border-color: rgba(2, 132, 199, 0.25);
+    box-shadow: 0 15px 35px -5px rgba(2, 132, 199, 0.15);
+}
+
+.dashboard-title {
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-cyan {
+    background: rgba(2, 132, 199, 0.1);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(2, 132, 199, 0.15);
+}
+
+.stat-green {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.stat-red {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.stat-blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-blue);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.stat-orange {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--accent-orange);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.table-custom {
+    color: var(--text-primary) !important;
+}
+
+.table-custom th {
+    background-color: rgba(241, 245, 249, 0.8) !important;
+    border-bottom: 2px solid var(--border-color) !important;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 1rem 1.25rem;
+}
+
+.table-custom td {
+    background-color: transparent !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    padding: 1.25rem;
+    vertical-align: middle;
+}
+
+.table-custom tr:hover td {
+    background-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Touch targets optimization */
+.btn-cyber, .btn-cyber-outline, .btn-warning, .btn-outline-danger {
+    min-height: 44px; /* Native mobile recommendation */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-cyber {
+    background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+    color: white;
+    border: none;
+    font-weight: 500;
+    border-radius: 10px;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);
+}
+
+.btn-cyber:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35);
+    color: white;
+    opacity: 0.95;
+}
+
+.btn-cyber-outline {
+    background: transparent;
+    color: var(--accent-cyan);
+    border: 1px solid var(--accent-cyan);
+    font-weight: 500;
+    border-radius: 10px;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.btn-cyber-outline:hover {
+    background: rgba(2, 132, 199, 0.08);
+    color: var(--accent-cyan);
+    transform: translateY(-2px);
+}
+
+.modal-content-custom {
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+}
+
+.modal-header-custom {
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.5rem;
+}
+
+.modal-footer-custom {
+    border-top: 1px solid var(--border-color);
+    padding: 1.5rem;
+}
+
+.form-control-custom {
+    background-color: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    min-height: 44px; /* Touch target */
+}
+
+.form-control-custom:focus {
+    background-color: #ffffff;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
+    color: var(--text-primary);
+}
+
+.input-group-text-custom {
+    background-color: #e2e8f0;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    color: var(--text-secondary);
+}
+
+.badge-paid {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #065f46;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.badge-unpaid {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #991b1b;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.badge-winner {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.toggle-btn {
+    transition: all 0.2s ease;
+    min-height: 48px; /* Large touch area for checklist toggle */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.toggle-btn:hover {
+    transform: scale(1.02);
+}
+
+/* Micro-animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease forwards;
+}
+
+/* Mobile & Tablet Optimizations */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    
+    .glass-card {
+        padding: 1.25rem !important;
+        border-radius: 12px;
+    }
+    
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 1.25rem;
+        margin-right: 0.75rem !important;
+    }
+    
+    .fs-4 {
+        font-size: 1.25rem !important;
+    }
+    
+    .table-custom th, .table-custom td {
+        padding: 0.75rem 0.75rem !important;
+        font-size: 0.875rem;
+    }
+
+    .btn-cyber, .btn-cyber-outline, .btn-warning {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+}
+
+@media (max-width: 576px) {
+    body {
+        padding-top: 10px;
+    }
+    
+    .dashboard-title {
+        font-size: 1.75rem;
+        text-align: center;
+    }
+    
+    p.text-secondary {
+        font-size: 0.8rem;
+        text-align: center;
+    }
+    
+    /* Make month-year navigation form wrap neatly */
+    .glass-card form {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .glass-card form select, 
+    .glass-card form input[type="number"] {
+        flex: 1;
+        min-width: 60px;
+    }
+    
+    /* Stack action buttons vertically on extra small screens */
+    .d-flex.gap-2 {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .d-flex.gap-2 button, .d-flex.gap-2 a {
+        width: 100%;
+    }
+    
+    .table-custom {
+        white-space: nowrap; /* Avoid text wrapping in tables causing height issues */
+    }
+}

@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบจัดการวงแชร์ | Share Ring Management</title>
+    
+    <!-- Mobile Web App Capable Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#3b82f6">
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container py-4">
+    <!-- Admin Info & Alerts Bar -->
+    {{ if .AlertMsg }}
+        <div class="alert alert-success alert-dismissible fade show mb-3 shadow-sm rounded-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>{{ .AlertMsg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {{ end }}
+    {{ if .AlertErr }}
+        <div class="alert alert-danger alert-dismissible fade show mb-3 shadow-sm rounded-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ .AlertErr }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {{ end }}
+
+    <!-- Admin mode status bar -->
+    <div class="d-flex justify-content-between align-items-center mb-3 animate-fade-in">
+        <div>
+            {{ if .IsAdmin }}
+                <span class="badge bg-success p-2 fs-7"><i class="bi bi-shield-lock-fill me-1"></i>โหมดผู้ดูแลระบบ (Admin Mode)</span>
+            {{ else }}
+                <span class="badge bg-secondary p-2 fs-7"><i class="bi bi-eye-fill me-1"></i>โหมดอ่านอย่างเดียว (Read-Only Mode)</span>
+            {{ end }}
+        </div>
+        <div>
+            {{ if .IsAdmin }}
+                <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right me-1"></i>ออกจากระบบ Admin</a>
+            {{ else }}
+                <button type="button" class="btn btn-sm btn-cyber" data-bs-toggle="modal" data-bs-target="#loginModal"><i class="bi bi-box-arrow-in-right me-1"></i>เข้าสู่ระบบ Admin</button>
+            {{ end }}
+        </div>
+    </div>
+
+    <!-- Header Section -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 animate-fade-in">
+        <div>
+            <h1 class="dashboard-title mb-1"><i class="bi bi-wallet2 me-2"></i>ระบบจัดการวงแชร์</h1>
+            <p class="text-secondary mb-0">สำหรับบริหารวงแชร์ขนาดเล็ก (5-50 คน) • ค่าส่งพื้นฐาน {{ .Setting.MonthlyAmount | formatMoney }} บาท/เดือน</p>
+        </div>
+        
+        <!-- Month/Year Navigation -->
+        <div class="glass-card p-3 d-flex align-items-center">
+            <form action="/" method="GET" class="d-flex align-items-center gap-2 m-0">
+                <select name="month" class="form-select form-control-custom" style="width: auto;">
+                    {{ range $index, $name := .ThaiMonths }}
+                        {{ $mNum := add $index 1 }}
+                        <option value="{{ $mNum }}" {{ if eq $mNum $.Month }}selected{{ end }}>{{ $name }}</option>
+                    {{ end }}
+                </select>
+                <input type="number" name="year" value="{{ .Year }}" class="form-control form-control-custom" style="width: 100px;" min="2000" max="2100">
+                <button type="submit" class="btn btn-cyber"><i class="bi bi-calendar-check-fill me-1"></i> แสดง</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard Row -->
+    <div class="row g-3 mb-4 animate-fade-in" style="animation-delay: 0.1s;">
+        <!-- Card 1: Total Members -->
+        <div class="col-6 col-md-3">
+            <div class="glass-card p-3 h-100 d-flex align-items-center">
+                <div class="stat-icon stat-cyan me-3">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <div>
+                    <div class="text-secondary fs-7">สมาชิกทั้งหมด</div>
+                    <div class="fs-4 fw-bold">{{ .TotalMembers }} คน</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Paid -->
+        <div class="col-6 col-md-3">
+            <div class="glass-card p-3 h-100 d-flex align-items-center">
+                <div class="stat-icon stat-green me-3">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <div>
+                    <div class="text-secondary fs-7">ชำระแล้ว</div>
+                    <div class="fs-4 fw-bold text-success">{{ .PaidCount }} คน</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Unpaid -->
+        <div class="col-6 col-md-3">
+            <div class="glass-card p-3 h-100 d-flex align-items-center">
+                <div class="stat-icon stat-red me-3">
+                    <i class="bi bi-clock-fill"></i>
+                </div>
+                <div>
+                    <div class="text-secondary fs-7">ยังไม่ชำระ</div>
+                    <div class="fs-4 fw-bold text-danger">{{ .UnpaidCount }} คน</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Collected -->
+        <div class="col-6 col-md-3">
+            <div class="glass-card p-3 h-100 d-flex align-items-center">
+                <div class="stat-icon stat-blue me-3">
+                    <i class="bi bi-currency-dollar"></i>
+                </div>
+                <div>
+                    <div class="text-secondary fs-7">เงินที่เก็บได้ประจำงวด</div>
+                    <div class="fs-4 fw-bold text-info">{{ .CollectedMoney | formatMoney }} ฿</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Latest Winner Dashboard Info -->
+    <div class="row g-3 mb-4 animate-fade-in" style="animation-delay: 0.15s;">
+        <div class="col-12">
+            <div class="glass-card p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon stat-orange me-3">
+                        <i class="bi bi-trophy-fill"></i>
+                    </div>
+                    <div>
+                        <div class="text-secondary fs-7">ผู้ได้รับแชร์ล่าสุดประจำวง</div>
+                        <div class="fw-bold fs-5 text-warning">
+                            {{ .LatestWinnerName }}
+                            {{ if gt .LatestWinnerNumber 0 }}
+                                <span class="fs-7 text-secondary fw-normal">(คนที่ {{ .LatestWinnerNumber }})</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon stat-orange me-3">
+                        <i class="bi bi-percent"></i>
+                    </div>
+                    <div>
+                        <div class="text-secondary fs-7">ดอกเบี้ยล่าสุด</div>
+                        <div class="fw-bold fs-5 text-warning">{{ .LatestInterest | formatMoney }} ฿</div>
+                    </div>
+                </div>
+                {{ if .IsAdmin }}
+                <div class="d-flex gap-2">
+                    <button class="btn btn-cyber" data-bs-toggle="modal" data-bs-target="#winnerModal">
+                        <i class="bi bi-award-fill me-1"></i> บันทึกผู้ได้รับแชร์
+                    </button>
+                    <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#randomWinnerModal">
+                        <i class="bi bi-shuffle me-1"></i> สุ่มจับฉลาก
+                    </button>
+                    <button class="btn btn-cyber-outline" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                        <i class="bi bi-gear-fill me-1"></i> แก้ไขค่าส่งรายเดือน
+                    </button>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Member Table Section -->
+    <div class="glass-card p-4 animate-fade-in" style="animation-delay: 0.2s;">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <h4 class="mb-0 fw-bold"><i class="bi bi-table me-2 text-cyan"></i> ตารางสถานะงวด {{ .ThaiMonthName }} {{ .Year }}</h4>
+            
+            <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
+                <!-- Search Form -->
+                <form action="/" method="GET" class="d-flex gap-2 m-0">
+                    <input type="hidden" name="month" value="{{ .Month }}">
+                    <input type="hidden" name="year" value="{{ .Year }}">
+                    <div class="input-group">
+                        <span class="input-group-text input-group-text-custom"><i class="bi bi-search"></i></span>
+                        <input type="text" name="search" value="{{ .Search }}" class="form-control form-control-custom" placeholder="ค้นหาชื่อ / เบอร์โทร..." style="min-width: 200px;">
+                    </div>
+                    <button type="submit" class="btn btn-cyber-outline">ค้นหา</button>
+                    {{ if .Search }}
+                        <a href="/?month={{ .Month }}&year={{ .Year }}" class="btn btn-outline-secondary d-flex align-items-center"><i class="bi bi-x-lg"></i></a>
+                    {{ end }}
+                </form>
+                
+                <!-- Admin Operations -->
+                {{ if .IsAdmin }}
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#resetPaymentModal">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> รีเซ็ตสถานะชำระเงิน
+                </button>
+                <button class="btn btn-cyber" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                    <i class="bi bi-person-plus-fill me-1"></i> เพิ่มสมาชิก
+                </button>
+                {{ end }}
+            </div>
+        </div>
+
+        <!-- Desktop Table Layout -->
+        <div class="table-responsive d-none d-md-block">
+            <table class="table table-custom">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 25%;">ชื่อสมาชิก</th>
+                        <th style="width: 15%;">เบอร์โทรศัพท์</th>
+                        <th style="width: 15%;">ดอกเบี้ยประมูล</th>
+                        <th style="width: 15%;">ยอดต้องจ่ายงวดนี้</th>
+                        <th style="width: 15%; text-align: center;">สถานะชำระเงิน</th>
+                        {{ if $.IsAdmin }}
+                        <th style="width: 10%; text-align: center;">จัดการ</th>
+                        {{ end }}
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ if .Rows }}
+                        {{ range $index, $row := .Rows }}
+                            <tr>
+                                <td>{{ add $index 1 }}</td>
+                                <td>
+                                    <span class="fw-bold">{{ $row.Member.Name }}</span>
+                                    {{ if $row.Member.HasReceivedShare }}
+                                        <span class="badge-winner ms-1"><i class="bi bi-trophy-fill"></i> ได้แชร์แล้ว คนที่ {{ $row.WinnerNumber }}</span>
+                                    {{ end }}
+                                </td>
+                                <td><i class="bi bi-telephone text-secondary me-1"></i>{{ if $row.Member.Phone }}{{ $row.Member.Phone }}{{ else }}-{{ end }}</td>
+                                <td>
+                                    {{ if $row.Member.HasReceivedShare }}
+                                        <span class="text-warning fw-bold">{{ $row.Member.InterestAmount | formatMoney }} ฿</span>
+                                    {{ else }}
+                                        <span class="text-secondary">-</span>
+                                    {{ end }}
+                                </td>
+                                <td class="fw-bold text-info">{{ $row.NextPaymentValue | formatMoney }} ฿</td>
+                                <td style="text-align: center;">
+                                    {{ if $.IsAdmin }}
+                                        <!-- Toggle Status Form -->
+                                        <form action="/payment/toggle" method="POST" class="d-inline m-0">
+                                            <input type="hidden" name="member_id" value="{{ $row.Member.ID }}">
+                                            <input type="hidden" name="month" value="{{ $.Month }}">
+                                            <input type="hidden" name="year" value="{{ $.Year }}">
+                                            <button type="submit" class="btn btn-sm toggle-btn {{ if $row.Payment.Paid }}badge-paid{{ else }}badge-unpaid{{ end }}">
+                                                {{ if $row.Payment.Paid }}
+                                                    <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
+                                                    {{ if $row.Payment.PaidDate }}
+                                                        <div style="font-size: 0.65rem; opacity: 0.8; margin-top: 2px;">
+                                                            {{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }}
+                                                        </div>
+                                                    {{ end }}
+                                                {{ else }}
+                                                    <i class="bi bi-clock-fill"></i> ยังไม่ชำระ
+                                                {{ end }}
+                                            </button>
+                                        </form>
+                                    {{ else }}
+                                        {{ if $row.Payment.Paid }}
+                                            <span class="badge-paid">
+                                                <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
+                                                {{ if $row.Payment.PaidDate }}
+                                                    <div style="font-size: 0.65rem; opacity: 0.8; margin-top: 2px;">
+                                                        {{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }}
+                                                    </div>
+                                                {{ end }}
+                                            </span>
+                                        {{ else }}
+                                            <span class="badge-unpaid">
+                                                <i class="bi bi-clock-fill"></i> ยังไม่ชำระ
+                                            </span>
+                                        {{ end }}
+                                    {{ end }}
+                                </td>
+                                {{ if $.IsAdmin }}
+                                <td style="text-align: center;">
+                                    <div class="d-flex justify-content-center gap-1">
+                                        <!-- Edit trigger button with data attributes -->
+                                        <button type="button" 
+                                                class="btn btn-sm btn-cyber-outline py-1 px-2"
+                                                data-id="{{ $row.Member.ID }}"
+                                                data-name="{{ $row.Member.Name }}"
+                                                data-phone="{{ $row.Member.Phone }}"
+                                                data-has-received="{{ $row.Member.HasReceivedShare }}"
+                                                data-interest="{{ $row.Member.InterestAmount }}"
+                                                data-received-month="{{ $row.Member.ReceivedMonth }}"
+                                                data-received-year="{{ $row.Member.ReceivedYear }}"
+                                                onclick="openEditModal(this)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <!-- Delete trigger button -->
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-danger py-1 px-2"
+                                                data-id="{{ $row.Member.ID }}"
+                                                data-name="{{ $row.Member.Name }}"
+                                                onclick="openDeleteModal(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                {{ end }}
+                            </tr>
+                        {{ end }}
+                    {{ else }}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-secondary">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i> ไม่พบข้อมูลสมาชิก
+                            </td>
+                        </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mobile Card Layout -->
+        <div class="d-block d-md-none">
+            {{ if .Rows }}
+                <div class="row g-3">
+                    {{ range $index, $row := .Rows }}
+                        <div class="col-12 animate-fade-in" style="animation-delay: calc({{ $index }} * 0.03s);">
+                            <div class="glass-card p-3" style="background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(15, 23, 42, 0.08);">
+                                <!-- Header: Name & Status -->
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h5 class="fw-bold mb-0 text-dark" style="font-size: 1.1rem;">{{ $row.Member.Name }}</h5>
+                                        {{ if $row.Member.Phone }}
+                                            <a href="tel:{{ $row.Member.Phone }}" class="text-secondary fs-7 text-decoration-none"><i class="bi bi-telephone me-1"></i>{{ $row.Member.Phone }}</a>
+                                        {{ else }}
+                                            <span class="text-secondary fs-7"><i class="bi bi-telephone me-1"></i>ไม่มีเบอร์โทร</span>
+                                        {{ end }}
+                                    </div>
+                                    {{ if $row.Member.HasReceivedShare }}
+                                        <span class="badge-winner"><i class="bi bi-trophy-fill"></i> คนที่ {{ $row.WinnerNumber }}</span>
+                                    {{ end }}
+                                </div>
+                                
+                                <!-- Info Row -->
+                                <div class="row g-2 my-2 py-2 border-top border-bottom border-light-subtle">
+                                    <div class="col-6">
+                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ดอกเบี้ยประมูล</small>
+                                        <span class="fw-bold {{ if $row.Member.HasReceivedShare }}text-warning{{ else }}text-dark{{ end }}">
+                                            {{ if $row.Member.HasReceivedShare }}{{ $row.Member.InterestAmount | formatMoney }} ฿{{ else }}-{{ end }}
+                                        </span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-secondary d-block" style="font-size: 0.75rem;">ยอดต้องจ่ายงวดนี้</small>
+                                        <span class="fw-bold text-info fs-5">{{ $row.NextPaymentValue | formatMoney }} ฿</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Toggle Payment Status (Full Width Button) -->
+                                <div class="mb-3">
+                                    {{ if $.IsAdmin }}
+                                        <form action="/payment/toggle" method="POST" class="m-0">
+                                            <input type="hidden" name="member_id" value="{{ $row.Member.ID }}">
+                                            <input type="hidden" name="month" value="{{ $.Month }}">
+                                            <input type="hidden" name="year" value="{{ $.Year }}">
+                                            <button type="submit" class="btn btn-sm toggle-btn {{ if $row.Payment.Paid }}badge-paid{{ else }}badge-unpaid{{ end }} w-100 py-2">
+                                                {{ if $row.Payment.Paid }}
+                                                    <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
+                                                    {{ if $row.Payment.PaidDate }}
+                                                        <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }})</span>
+                                                    {{ end }}
+                                                {{ else }}
+                                                    <i class="bi bi-clock-fill"></i> ยังไม่ชำระ (กดเพื่อชำระเงิน)
+                                                {{ end }}
+                                            </button>
+                                        </form>
+                                    {{ else }}
+                                        <div class="toggle-btn text-center {{ if $row.Payment.Paid }}badge-paid{{ else }}badge-unpaid{{ end }} w-100 py-2" style="cursor: default;">
+                                            {{ if $row.Payment.Paid }}
+                                                <i class="bi bi-check-circle-fill"></i> ชำระแล้ว
+                                                {{ if $row.Payment.PaidDate }}
+                                                    <span style="font-size: 0.75rem; opacity: 0.9;">({{ $row.Payment.PaidDate.Format "02/01/2006 15:04" }})</span>
+                                                {{ end }}
+                                            {{ else }}
+                                                <i class="bi bi-clock-fill"></i> ยังไม่ชำระ
+                                            {{ end }}
+                                        </div>
+                                    {{ end }}
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                {{ if $.IsAdmin }}
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" 
+                                            class="btn btn-sm btn-cyber-outline py-1 px-3"
+                                            data-id="{{ $row.Member.ID }}"
+                                            data-name="{{ $row.Member.Name }}"
+                                            data-phone="{{ $row.Member.Phone }}"
+                                            data-has-received="{{ $row.Member.HasReceivedShare }}"
+                                            data-interest="{{ $row.Member.InterestAmount }}"
+                                            data-received-month="{{ $row.Member.ReceivedMonth }}"
+                                            data-received-year="{{ $row.Member.ReceivedYear }}"
+                                            onclick="openEditModal(this)">
+                                        <i class="bi bi-pencil me-1"></i> แก้ไข
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger py-1 px-3"
+                                            data-id="{{ $row.Member.ID }}"
+                                            data-name="{{ $row.Member.Name }}"
+                                            onclick="openDeleteModal(this)">
+                                        <i class="bi bi-trash me-1"></i> ลบ
+                                    </button>
+                                </div>
+                                {{ end }}
+                            </div>
+                        </div>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <div class="text-center py-4 text-secondary">
+                    <i class="bi bi-inbox fs-3 d-block mb-2"></i> ไม่พบข้อมูลสมาชิก
+                </div>
+            {{ end }}
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- Modal: เพิ่มสมาชิก (Add Member) -->
+<div class="modal fade" id="addMemberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="/member/add" method="POST">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-person-plus-fill me-2 text-cyan"></i>เพิ่มสมาชิกใหม่</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">ชื่อ - นามสกุล</label>
+                        <input type="text" name="name" class="form-control form-control-custom" placeholder="กรอกชื่อ-นามสกุล..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">เบอร์โทรศัพท์</label>
+                        <input type="text" name="phone" class="form-control form-control-custom" placeholder="กรอกเบอร์โทรศัพท์ เช่น 082-222-3333" oninput="formatPhoneNumber(this)" maxlength="12">
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-cyber">บันทึก</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: แก้ไขสมาชิก (Edit Member) -->
+<div class="modal fade" id="editMemberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="/member/update" method="POST">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-cyan"></i>แก้ไขข้อมูลสมาชิก</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="id" id="edit-id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">ชื่อ - นามสกุล</label>
+                        <input type="text" name="name" id="edit-name" class="form-control form-control-custom" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">เบอร์โทรศัพท์</label>
+                        <input type="text" name="phone" id="edit-phone" class="form-control form-control-custom" oninput="formatPhoneNumber(this)" maxlength="12">
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="has_received_share" id="edit-has-received">
+                        <label class="form-check-label" for="edit-has-received">ได้รับแชร์แล้ว (ประมูลชนะแล้ว)</label>
+                    </div>
+
+                    <div class="mb-3" id="edit-interest-container" style="display: none;">
+                        <label class="form-label text-secondary">ดอกเบี้ยประมูล (บาท)</label>
+                        <input type="number" name="interest_amount" id="edit-interest" class="form-control form-control-custom" min="0" step="any">
+                    </div>
+
+                    <div class="row" id="edit-received-date-container" style="display: none;">
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-secondary">เดือนที่ได้รับแชร์</label>
+                            <select name="received_month" id="edit-received-month" class="form-select form-control-custom">
+                                {{ range $index, $name := .ThaiMonths }}
+                                    <option value="{{ add $index 1 }}">{{ $name }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-secondary">ปีที่ได้รับแชร์ (ค.ศ.)</label>
+                            <input type="number" name="received_year" id="edit-received-year" class="form-control form-control-custom" min="2000" max="2100">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-cyber">บันทึกการแก้ไข</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: บันทึกผู้ได้รับแชร์ (Record Winner) -->
+<div class="modal fade" id="winnerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="/winner/save" method="POST">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-award-fill me-2 text-warning"></i>บันทึกผู้ได้รับแชร์ (บิดชนะ)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="month" value="{{ .Month }}">
+                    <input type="hidden" name="year" value="{{ .Year }}">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">เลือกสมาชิกที่บิดแชร์ได้</label>
+                        <select name="member_id" class="form-select form-control-custom" required>
+                            <option value="" disabled selected>-- เลือกสมาชิก --</option>
+                            {{ range .Rows }}
+                                {{ if not .Member.HasReceivedShare }}
+                                    <option value="{{ .Member.ID }}">{{ .Member.Name }}</option>
+                                {{ end }}
+                            {{ end }}
+                        </select>
+                        <div class="form-text text-secondary mt-1">แสดงเฉพาะผู้ที่ยังไม่เคยได้รับแชร์เท่านั้น</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">จำนวนดอกเบี้ยประมูล (บาท)</label>
+                        <input type="number" name="interest_amount" class="form-control form-control-custom" placeholder="เช่น 200" min="0" required>
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold">บันทึกผู้รับแชร์</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: แก้ไขการตั้งค่า (Settings) -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="/settings/update" method="POST">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-gear-fill me-2 text-cyan"></i>ตั้งค่าค่าส่งรายเดือน</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">จำนวนเงินค่าส่งแชร์พื้นฐาน (บาท / สมาชิก / เดือน)</label>
+                        <input type="number" name="monthly_amount" value="{{ .Setting.MonthlyAmount }}" class="form-control form-control-custom" min="1" required>
+                        <div class="form-text text-secondary mt-1">ค่าเริ่มต้นคือ 1,000 บาท สามารถเปลี่ยนได้ที่นี่</div>
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-cyber">บันทึกค่า</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: ยืนยันการลบสมาชิก (Confirm Delete) -->
+<div class="modal fade" id="deleteMemberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="/member/delete" method="POST">
+            <div class="modal-content modal-content-custom border-danger">
+                <div class="modal-header modal-header-custom border-danger">
+                    <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>ยืนยันการลบสมาชิก</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <input type="hidden" name="id" id="delete-id">
+                    <p class="fs-5">คุณแน่ใจหรือไม่ว่าต้องการลบสมาชิก <br><strong id="delete-name-span" class="text-cyan">--</strong>?</p>
+                    <p class="text-secondary fs-7"><i class="bi bi-info-circle me-1"></i> ประวัติการชำระเงินทั้งหมดของสมาชิกท่านนี้จะถูกลบออกถาวร</p>
+                </div>
+                <div class="modal-footer modal-footer-custom border-danger">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-danger">ยืนยันการลบ</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: วงล้อสุ่มจับฉลากผู้ได้รับแชร์ (Spinning Wheel Card) -->
+<div class="modal fade" id="randomWinnerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom border-warning">
+            <div class="modal-header modal-header-custom border-warning">
+                <h5 class="modal-title text-warning fw-bold"><i class="bi bi-shuffle me-2"></i>วงล้อสุ่มจับฉลากผู้ได้รับแชร์</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <p class="text-secondary fs-7 mb-2">สุ่มเลือกผู้ที่ยังไม่ได้แชร์โดยคิดดอกเบี้ยที่ 200 บาท</p>
+                
+                <!-- Wheel UI -->
+                <div class="position-relative d-inline-block my-3" style="width: 310px; height: 310px;">
+                    <!-- Pointer Arrow -->
+                    <div class="position-absolute" style="top: -12px; left: 50%; transform: translateX(-50%); z-index: 10; width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 25px solid var(--accent-red); filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"></div>
+                    <!-- Canvas -->
+                    <canvas id="wheel-canvas" width="300" height="300" class="rounded-circle shadow-sm" style="border: 6px solid #ffffff; background-color: #fff;"></canvas>
+                </div>
+                
+                <!-- Control Buttons -->
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" id="spin-start-btn" class="btn btn-warning text-dark fw-bold flex-grow-1 py-3 fs-5" onclick="startSpinningWheel()">
+                        <i class="bi bi-play-circle-fill me-2"></i> เริ่มหมุนวงล้อ
+                    </button>
+                    <button type="button" id="spin-stop-btn" class="btn btn-danger text-white fw-bold flex-grow-1 py-3 fs-5" onclick="stopSpinningWheel()" disabled>
+                        <i class="bi bi-stop-circle-fill me-2"></i> กดหยุดหมุน
+                    </button>
+                </div>
+                
+                <form id="lottery-form" action="/winner/save" method="POST" style="display: none;">
+                    <input type="hidden" name="member_id" id="lottery-winner-id">
+                    <input type="hidden" name="interest_amount" value="200">
+                    <input type="hidden" name="month" value="{{ .Month }}">
+                    <input type="hidden" name="year" value="{{ .Year }}">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: ยินดีด้วยกับผู้โชคดี (Congrats Card Modal) -->
+<div class="modal fade" id="congratsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom border-warning" style="background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);">
+            <div class="modal-body p-5 text-center position-relative overflow-hidden">
+                <div class="fs-1 mb-2 animate-bounce">🎉 🏆 🎉</div>
+                
+                <h1 class="fw-bold text-warning mb-2" style="font-size: 2.6rem; font-family: 'Prompt', sans-serif; text-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);">ยินดีด้วย!</h1>
+                <p class="text-secondary fs-6">สุ่มได้ผู้รับแชร์ประจำงวดนี้</p>
+                
+                <!-- Winner display card -->
+                <div class="glass-card p-4 my-4" style="background: rgba(255, 255, 255, 0.95); border: 2.5px solid var(--accent-orange); box-shadow: 0 12px 35px -5px rgba(245, 158, 11, 0.35);">
+                    <h2 id="congrats-winner-name" class="fw-bold text-cyan mb-0" style="font-size: 2.2rem; line-height: 1.4;">-</h2>
+                </div>
+                
+                <p class="text-secondary fs-7 mb-4"><i class="bi bi-info-circle me-1"></i>ระบบจะทำการบันทึกยอดเงินรับแชร์พร้อมดอกเบี้ย 200 บาท</p>
+                
+                <button type="button" class="btn btn-warning text-dark fw-bold w-100 py-3 fs-5" onclick="submitLotteryWinner()">
+                    <i class="bi bi-check-circle-fill me-2"></i> บันทึกผลรับแชร์
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: เข้าสู่ระบบ (Admin Login) -->
+<div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <form action="/login" method="POST" class="m-0 w-100">
+            <div class="modal-content modal-content-custom">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title"><i class="bi bi-lock-fill me-2 text-cyan"></i>เข้าสู่ระบบ Admin</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">ชื่อผู้ใช้ (Username)</label>
+                        <input type="text" name="username" class="form-control form-control-custom" placeholder="admin" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">รหัสผ่าน (Password)</label>
+                        <input type="password" name="password" class="form-control form-control-custom" placeholder="admin" required>
+                    </div>
+                    <div class="form-text text-secondary mt-1 text-center">ชื่อผู้ใช้: admin / รหัสผ่าน: admin</div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-cyber">เข้าสู่ระบบ</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: ยืนยันการรีเซ็ตการชำระเงิน (Confirm Reset Payment) -->
+<div class="modal fade" id="resetPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="/payment/reset" method="POST" class="m-0 w-100">
+            <input type="hidden" name="month" value="{{ .Month }}">
+            <input type="hidden" name="year" value="{{ .Year }}">
+            <div class="modal-content modal-content-custom border-danger">
+                <div class="modal-header modal-header-custom border-danger">
+                    <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>ยืนยันการรีเซ็ตการชำระเงิน</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <p class="fs-5">คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตสถานะชำระเงินของงวด <br><strong class="text-cyan">{{ .ThaiMonthName }} {{ .Year }}</strong> ทั้งหมด?</p>
+                    <p class="text-secondary fs-7"><i class="bi bi-info-circle me-1"></i> สมาชิกทุกคนในงวดนี้จะถูกเปลี่ยนสถานะเป็น "ยังไม่ชำระ" และเวลาชำระเงินเดิมจะถูกลบออกทั้งหมด</p>
+                </div>
+                <div class="modal-footer modal-footer-custom border-danger">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-danger">ยืนยันการรีเซ็ต</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bootstrap Bundle with Popper JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // Handles filling edit modal dynamically
+    function openEditModal(btn) {
+        document.getElementById('edit-id').value = btn.getAttribute('data-id');
+        document.getElementById('edit-name').value = btn.getAttribute('data-name');
+        document.getElementById('edit-phone').value = btn.getAttribute('data-phone');
+        
+        var hasReceived = btn.getAttribute('data-has-received') === 'true';
+        document.getElementById('edit-has-received').checked = hasReceived;
+        
+        var receivedMonth = btn.getAttribute('data-received-month');
+        if (!receivedMonth || receivedMonth === '0') {
+            receivedMonth = '1';
+        }
+        var receivedYear = btn.getAttribute('data-received-year');
+        if (!receivedYear || receivedYear === '0') {
+            receivedYear = new Date().getFullYear();
+        }
+        document.getElementById('edit-received-month').value = receivedMonth;
+        document.getElementById('edit-received-year').value = receivedYear;
+        
+        var interestContainer = document.getElementById('edit-interest-container');
+        var dateContainer = document.getElementById('edit-received-date-container');
+        if (hasReceived) {
+            interestContainer.style.display = 'block';
+            dateContainer.style.display = 'flex';
+        } else {
+            interestContainer.style.display = 'none';
+            dateContainer.style.display = 'none';
+        }
+        
+        document.getElementById('edit-interest').value = btn.getAttribute('data-interest');
+        
+        var modalEl = document.getElementById('editMemberModal');
+        var editModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        editModal.show();
+    }
+
+    // Handles edit member received share toggle in the edit form
+    document.getElementById('edit-has-received').addEventListener('change', function(e) {
+        var interestContainer = document.getElementById('edit-interest-container');
+        var dateContainer = document.getElementById('edit-received-date-container');
+        if (e.target.checked) {
+            interestContainer.style.display = 'block';
+            dateContainer.style.display = 'flex';
+        } else {
+            interestContainer.style.display = 'none';
+            dateContainer.style.display = 'none';
+            document.getElementById('edit-interest').value = '0';
+        }
+    });
+
+    // Handles filling and opening the delete confirmation modal
+    function openDeleteModal(btn) {
+        document.getElementById('delete-id').value = btn.getAttribute('data-id');
+        document.getElementById('delete-name-span').innerText = btn.getAttribute('data-name');
+        var modalEl = document.getElementById('deleteMemberModal');
+        var deleteModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        deleteModal.show();
+    }
+
+    // Canvas-based Spinning Wheel Engine
+    var wheelCanvas = document.getElementById('wheel-canvas');
+    var wheelCtx = wheelCanvas.getContext('2d');
+    var wheelNames = [];
+    var wheelIds = [];
+    var currentAngle = 0;
+    var isSpinning = false;
+    var spinSpeed = 0;
+    var isDecelerating = false;
+    var animationFrameId = null;
+
+    // Bright color palette for segments
+    var segmentColors = [
+        '#3b82f6', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', 
+        '#ec4899', '#f43f5e', '#14b8a6', '#0284c7', '#16a34a'
+    ];
+
+    // Listen to modal show event to initialize wheel names
+    document.getElementById('randomWinnerModal').addEventListener('shown.bs.modal', function () {
+        var selectEl = document.querySelector('#winnerModal select[name="member_id"]');
+        if (!selectEl) return;
+        
+        var options = Array.from(selectEl.options).filter(opt => opt.value && !opt.disabled);
+        
+        wheelNames = options.map(opt => opt.text);
+        wheelIds = options.map(opt => opt.value);
+        
+        // Reset states
+        currentAngle = 0;
+        isSpinning = false;
+        spinSpeed = 0;
+        isDecelerating = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        
+        document.getElementById('spin-start-btn').disabled = false;
+        document.getElementById('spin-stop-btn').disabled = true;
+        
+        drawWheel();
+    });
+
+    function drawWheel() {
+        var numSegments = wheelNames.length;
+        if (numSegments === 0) {
+            // Draw empty state
+            wheelCtx.clearRect(0, 0, 300, 300);
+            wheelCtx.fillStyle = '#64748b';
+            wheelCtx.font = '16px Prompt';
+            wheelCtx.textAlign = 'center';
+            wheelCtx.fillText('ไม่มีสมาชิกให้สุ่ม', 150, 150);
+            return;
+        }
+
+        var arc = 2 * Math.PI / numSegments;
+        wheelCtx.clearRect(0, 0, 300, 300);
+        
+        for (var i = 0; i < numSegments; i++) {
+            var angle = currentAngle + i * arc;
+            
+            // Draw sector
+            wheelCtx.beginPath();
+            wheelCtx.fillStyle = segmentColors[i % segmentColors.length];
+            wheelCtx.moveTo(150, 150);
+            wheelCtx.arc(150, 150, 140, angle, angle + arc);
+            wheelCtx.lineTo(150, 150);
+            wheelCtx.fill();
+            
+            wheelCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+            wheelCtx.lineWidth = 2.5;
+            wheelCtx.stroke();
+            
+            // Draw text
+            wheelCtx.save();
+            wheelCtx.fillStyle = '#ffffff';
+            wheelCtx.font = 'bold 12px Prompt';
+            wheelCtx.textAlign = 'right';
+            wheelCtx.translate(150, 150);
+            wheelCtx.rotate(angle + arc / 2);
+            
+            var text = wheelNames[i];
+            if (text.length > 10) text = text.substring(0, 9) + '..';
+            wheelCtx.fillText(text, 125, 4);
+            wheelCtx.restore();
+        }
+
+        // Draw center pin
+        wheelCtx.beginPath();
+        wheelCtx.arc(150, 150, 22, 0, 2 * Math.PI);
+        wheelCtx.fillStyle = '#ffffff';
+        wheelCtx.fill();
+        wheelCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+        wheelCtx.shadowBlur = 6;
+        wheelCtx.strokeStyle = 'rgba(15, 23, 42, 0.15)';
+        wheelCtx.lineWidth = 3;
+        wheelCtx.stroke();
+        
+        // Center text emoji
+        wheelCtx.shadowBlur = 0; // reset
+        wheelCtx.fillStyle = '#1e293b';
+        wheelCtx.font = '14px Prompt';
+        wheelCtx.textAlign = 'center';
+        wheelCtx.fillText('🎲', 150, 154);
+    }
+
+    function animateWheel() {
+        if (!isSpinning) return;
+        
+        currentAngle += spinSpeed;
+        
+        if (isDecelerating) {
+            spinSpeed *= 0.982; // Decelerate speed gradually
+            
+            if (spinSpeed < 0.003) {
+                isSpinning = false;
+                cancelAnimationFrame(animationFrameId);
+                
+                // Calculate winner
+                // Pointer arrow points to the top: -Math.PI / 2
+                var numSegments = wheelNames.length;
+                var arc = 2 * Math.PI / numSegments;
+                
+                var normalizedAngle = (3 * Math.PI / 2 - currentAngle) % (2 * Math.PI);
+                if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
+                
+                var winnerIndex = Math.floor(normalizedAngle / arc) % numSegments;
+                var winnerName = wheelNames[winnerIndex];
+                var winnerId = wheelIds[winnerIndex];
+                
+                // Hide the spin wheel modal
+                var spinModalEl = document.getElementById('randomWinnerModal');
+                var spinModal = bootstrap.Modal.getInstance(spinModalEl);
+                if (spinModal) spinModal.hide();
+                
+                // Set the value in form
+                document.getElementById('lottery-winner-id').value = winnerId;
+                
+                // Set name in congrats modal
+                document.getElementById('congrats-winner-name').innerText = winnerName;
+                
+                // Open congrats modal
+                setTimeout(function() {
+                    var congratsModalEl = document.getElementById('congratsModal');
+                    var congratsModal = bootstrap.Modal.getInstance(congratsModalEl) || new bootstrap.Modal(congratsModalEl);
+                    congratsModal.show();
+                }, 400);
+                return;
+            }
+        }
+        
+        drawWheel();
+        animationFrameId = requestAnimationFrame(animateWheel);
+    }
+
+    // Submit handler for congratsModal button click
+    function submitLotteryWinner() {
+        document.getElementById('lottery-form').submit();
+    }
+
+    function startSpinningWheel() {
+        if (wheelNames.length === 0) {
+            alert("ไม่มีรายชื่อสมาชิกที่สามารถสุ่มได้ (เนื่องจากได้รับแชร์ครบทุกคนแล้ว)");
+            return;
+        }
+        
+        isSpinning = true;
+        isDecelerating = false;
+        spinSpeed = 0.35 + Math.random() * 0.2; // random rapid speed
+        
+        document.getElementById('spin-start-btn').disabled = true;
+        document.getElementById('spin-stop-btn').disabled = false;
+        
+        animateWheel();
+    }
+
+    function stopSpinningWheel() {
+        isDecelerating = true;
+        document.getElementById('spin-stop-btn').disabled = true;
+    }
+
+    // Auto-formatter for phone numbers (e.g. 082-222-3333)
+    function formatPhoneNumber(input) {
+        var clean = input.value.replace(/\D/g, '');
+        var formatted = '';
+        if (clean.length > 0) {
+            if (clean.length <= 3) {
+                formatted = clean;
+            } else if (clean.length <= 6) {
+                formatted = clean.substring(0, 3) + '-' + clean.substring(3);
+            } else {
+                formatted = clean.substring(0, 3) + '-' + clean.substring(3, 6) + '-' + clean.substring(6, 10);
+            }
+        }
+        input.value = formatted;
+    }
+</script>
+
+</body>
+</html>
