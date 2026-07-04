@@ -32,6 +32,7 @@ type Payment struct {
 type Setting struct {
 	ID              uint       `gorm:"primaryKey" json:"id"`
 	MonthlyAmount   float64    `gorm:"default:1000" json:"monthly_amount"`
+	AuctionStart    *time.Time `json:"auction_start"`    // Bidding start time for active month
 	AuctionDeadline *time.Time `json:"auction_deadline"` // Bidding deadline for active month
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

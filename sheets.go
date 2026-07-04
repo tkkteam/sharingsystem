@@ -16,6 +16,7 @@ type SheetsResponse struct {
 	Bids     []Bid     `json:"bids"`
 	Setting  struct {
 		MonthlyAmount   float64    `json:"MonthlyAmount"`
+		AuctionStart    *time.Time `json:"AuctionStart"`
 		AuctionDeadline *time.Time `json:"AuctionDeadline"`
 	} `json:"setting"`
 }
@@ -48,6 +49,7 @@ func fetchSheetsData() ([]Member, []Payment, []Bid, Setting, error) {
 
 	s := Setting{
 		MonthlyAmount:   sr.Setting.MonthlyAmount,
+		AuctionStart:    sr.Setting.AuctionStart,
 		AuctionDeadline: sr.Setting.AuctionDeadline,
 		UpdatedAt:       time.Now(),
 	}
@@ -125,10 +127,11 @@ func resetPaymentSheets(month, year int) error {
 	return sheetsPost(payload)
 }
 
-func updateSettingsSheets(monthlyAmount float64, deadline *time.Time) error {
+func updateSettingsSheets(monthlyAmount float64, start, deadline *time.Time) error {
 	payload := map[string]interface{}{
 		"action":         "update_settings",
 		"monthly_amount": monthlyAmount,
+		"start":          start,
 		"deadline":       deadline,
 	}
 	return sheetsPost(payload)

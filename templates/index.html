@@ -331,11 +331,16 @@
                             <tr class="member-row" data-name="{{ $row.Member.Name }}" data-phone="{{ $row.Member.Phone }}">
                                 <td>{{ add $index 1 }}</td>
                                 <td>
-                                    {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) }}
+                                    {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) (not $.AuctionNotStarted) }}
                                         <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-cyber fw-bold"
                                            data-id="{{ $row.Member.ID }}"
                                            data-name="{{ $row.Member.Name }}"
                                            onclick="openBidModal(this)">
+                                            {{ $row.Member.Name }}
+                                        </a>
+                                    {{ else if and (not $row.Member.HasReceivedShare) (or $.AuctionClosed $.AuctionNotStarted) }}
+                                        <a href="javascript:void(0)" style="cursor: pointer; text-decoration: underline dotted;" class="text-secondary fw-bold"
+                                           onclick="alertBiddingUnavailable()">
                                             {{ $row.Member.Name }}
                                         </a>
                                     {{ else }}
@@ -361,9 +366,17 @@
                                             {{ end }}
                                         {{ else }}
                                             {{ if $.AuctionClosed }}
-                                                <span class="badge bg-danger-subtle text-danger fs-7"><i class="bi bi-x-circle me-1"></i>สละสิทธิ์</span>
+                                                {{ if $.NoBidsAtAll }}
+                                                    <span class="badge bg-warning-subtle text-warning fs-7"><i class="bi bi-shuffle me-1"></i>รอจับฉลาก</span>
+                                                {{ else }}
+                                                    <span class="badge bg-danger-subtle text-danger fs-7"><i class="bi bi-x-circle me-1"></i>สละสิทธิ์</span>
+                                                {{ end }}
                                             {{ else }}
-                                                <span class="badge bg-secondary-subtle text-secondary fs-7">ยังไม่เสนอ</span>
+                                                {{ if $.AuctionNotStarted }}
+                                                    <span class="badge bg-secondary-subtle text-secondary fs-7"><i class="bi bi-clock me-1"></i>ยังไม่เปิด</span>
+                                                {{ else }}
+                                                    <span class="badge bg-secondary-subtle text-secondary fs-7">ยังไม่เสนอ</span>
+                                                {{ end }}
                                             {{ end }}
                                         {{ end }}
                                     {{ end }}
@@ -501,9 +514,17 @@
                                                     {{ end }}
                                                 {{ else }}
                                                     {{ if $.AuctionClosed }}
-                                                        <span class="text-danger fs-7" style="font-size: 0.75rem;"><i class="bi bi-x-circle"></i> สละสิทธิ์</span>
+                                                        {{ if $.NoBidsAtAll }}
+                                                            <span class="text-warning fs-7" style="font-size: 0.75rem;"><i class="bi bi-shuffle"></i> รอจับฉลาก</span>
+                                                        {{ else }}
+                                                            <span class="text-danger fs-7" style="font-size: 0.75rem;"><i class="bi bi-x-circle"></i> สละสิทธิ์</span>
+                                                        {{ end }}
                                                     {{ else }}
-                                                        <span class="text-secondary fs-7">ยังไม่เสนอ</span>
+                                                        {{ if $.AuctionNotStarted }}
+                                                            <span class="text-secondary fs-7" style="font-size: 0.75rem;"><i class="bi bi-clock"></i> ยังไม่เปิด</span>
+                                                        {{ else }}
+                                                            <span class="text-secondary fs-7">ยังไม่เสนอ</span>
+                                                        {{ end }}
                                                     {{ end }}
                                                 {{ end }}
                                             {{ end }}
@@ -548,14 +569,21 @@
                                 </div>
 
                                 <!-- Bidding Button for Member -->
-                                {{ if and (not $row.Member.HasReceivedShare) (not $.AuctionClosed) }}
+                                {{ if not $row.Member.HasReceivedShare }}
                                 <div class="mb-3">
+                                    {{ if and (not $.AuctionClosed) (not $.AuctionNotStarted) }}
                                     <button type="button" class="btn btn-sm btn-cyber w-100 py-2"
                                             data-id="{{ $row.Member.ID }}"
                                             data-name="{{ $row.Member.Name }}"
                                             onclick="openBidModal(this)">
                                         <i class="bi bi-pencil-square me-1"></i> เสนอราคาประมูล
                                     </button>
+                                    {{ else }}
+                                    <button type="button" class="btn btn-sm btn-secondary w-100 py-2"
+                                            onclick="alertBiddingUnavailable()">
+                                        <i class="bi bi-pencil-square me-1"></i> เสนอราคาประมูล
+                                    </button>
+                                    {{ end }}
                                 </div>
                                 {{ end }}
                                 
@@ -838,6 +866,11 @@
                         <label class="form-label text-secondary">จำนวนเงินค่าส่งแชร์พื้นฐาน (บาท / สมาชิก / เดือน)</label>
                         <input type="number" name="monthly_amount" value="{{ .Setting.MonthlyAmount }}" class="form-control form-control-custom" min="1" required>
                         <div class="form-text text-secondary mt-1">ค่าเริ่มต้นคือ 1,000 บาท สามารถเปลี่ยนได้ที่นี่</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">เวลาเริ่มต้นการประมูลเสนอราคางวดนี้</label>
+                        <input type="datetime-local" name="auction_start" id="settings-auction-start" class="form-control form-control-custom">
+                        <div class="form-text text-secondary mt-1">กำหนดวันและเวลาที่จะเริ่มเปิดให้สมาชิกเสนอราคาได้</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label text-secondary">เวลาสิ้นสุดการประมูลเสนอราคางวดนี้</label>
@@ -1289,59 +1322,98 @@
         filterMembersRealtime();
     });
 
-    // Countdown Timer logic if deadline is set
-    {{ if .Setting.AuctionDeadline }}
+    // Countdown Timer logic if start or deadline is set
+    {{ if or .Setting.AuctionStart .Setting.AuctionDeadline }}
     (function() {
+        var startStr = "{{ .AuctionStartStr }}";
         var deadlineStr = "{{ .AuctionDeadlineStr }}";
-        var deadline = new Date(deadlineStr);
+        var start = startStr ? new Date(startStr) : null;
+        var deadline = deadlineStr ? new Date(deadlineStr) : null;
         
-        // Format Thai Deadline Text
+        // Format Thai text for header time
         var options = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
         var timeEl = document.getElementById('deadline-time-text');
-        if (timeEl) {
-            timeEl.innerText = deadline.toLocaleDateString('th-TH', options) + ' น.';
-        }
         
         function updateCountdown() {
             var now = new Date();
-            var diff = deadline - now;
             var timerEl = document.getElementById('countdown-timer');
             if (!timerEl) return;
             
-            if (diff <= 0) {
-                timerEl.innerText = "หมดเวลาการประมูล (สละสิทธิ์สำหรับผู้ที่ยังไม่ได้เสนอราคา)";
-                timerEl.className = "fs-5 fw-bold text-danger animate-pulse";
+            if (start && now < start) {
+                // Not started yet
+                var diff = start - now;
+                var hours = Math.floor(diff / (1000 * 60 * 60));
+                var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                if (timeEl) {
+                    timeEl.innerText = "เปิดเสนอราคาในวันที่ " + start.toLocaleDateString('th-TH', options) + ' น.';
+                }
+                timerEl.innerText = "เริ่มประมูลในอีก " + hours + " ชม. " + minutes + " น. " + seconds + " วิ.";
+                timerEl.className = "fs-5 fw-bold text-secondary";
+            } else if (deadline && now < deadline) {
+                // Active bidding
+                var diff = deadline - now;
+                var hours = Math.floor(diff / (1000 * 60 * 60));
+                var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                if (timeEl) {
+                    timeEl.innerText = "สิ้นสุดประมูลในวันที่ " + deadline.toLocaleDateString('th-TH', options) + ' น.';
+                }
+                timerEl.innerText = hours + " ชม. " + minutes + " น. " + seconds + " วิ.";
+                timerEl.className = "fs-4 fw-bold text-warning";
+            } else {
+                // Closed
+                if (timeEl) {
+                    {{ if .NoBidsAtAll }}
+                        timeEl.innerHTML = '<span class="text-danger fw-bold"><i class="bi bi-shuffle me-1"></i>ปิดประมูลแล้ว (ไม่มีผู้เสนอราคา - รอจับฉลาก)</span>';
+                    {{ else }}
+                        timeEl.innerText = "ปิดประมูลเสร็จสิ้นแล้วเมื่อ " + (deadline ? deadline.toLocaleDateString('th-TH', options) + ' น.' : '');
+                    {{ end }}
+                }
+                {{ if .NoBidsAtAll }}
+                    timerEl.innerText = "รอจับฉลาก";
+                    timerEl.className = "fs-4 fw-bold text-warning animate-pulse";
+                {{ else }}
+                    timerEl.innerText = "ปิดรับการประมูล";
+                    timerEl.className = "fs-4 fw-bold text-danger";
+                {{ end }}
                 clearInterval(timerInterval);
-                return;
             }
-            
-            var hours = Math.floor(diff / (1000 * 60 * 60));
-            var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            var seconds = Math.floor((diff % (1000 * 60)) / 1000);
-            
-            timerEl.innerText = hours + " ชั่วโมง " + minutes + " นาที " + seconds + " วินาที";
         }
         
         var timerInterval = setInterval(updateCountdown, 1000);
         updateCountdown();
     })();
+    {{ end }}
     
-    // Set Settings Modal Deadline Input Default Value
+    // Set Settings Modal Start/Deadline Input Default Values
     try {
-        var deadlineVal = new Date("{{ .AuctionDeadlineStr }}");
-        var year = deadlineVal.getFullYear();
-        var month = String(deadlineVal.getMonth() + 1).padStart(2, '0');
-        var day = String(deadlineVal.getDate()).padStart(2, '0');
-        var hours = String(deadlineVal.getHours()).padStart(2, '0');
-        var minutes = String(deadlineVal.getMinutes()).padStart(2, '0');
+        var startInput = document.getElementById('settings-auction-start');
+        if (startInput && "{{ .AuctionStartStr }}") {
+            var startVal = new Date("{{ .AuctionStartStr }}");
+            var syear = startVal.getFullYear();
+            var smonth = String(startVal.getMonth() + 1).padStart(2, '0');
+            var sday = String(startVal.getDate()).padStart(2, '0');
+            var shours = String(startVal.getHours()).padStart(2, '0');
+            var sminutes = String(startVal.getMinutes()).padStart(2, '0');
+            startInput.value = `${syear}-${smonth}-${sday}T${shours}:${sminutes}`;
+        }
+        
         var deadlineInput = document.getElementById('settings-auction-deadline');
-        if (deadlineInput) {
-            deadlineInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        if (deadlineInput && "{{ .AuctionDeadlineStr }}") {
+            var deadlineVal = new Date("{{ .AuctionDeadlineStr }}");
+            var dyear = deadlineVal.getFullYear();
+            var dmonth = String(deadlineVal.getMonth() + 1).padStart(2, '0');
+            var dday = String(deadlineVal.getDate()).padStart(2, '0');
+            var dhours = String(deadlineVal.getHours()).padStart(2, '0');
+            var dminutes = String(deadlineVal.getMinutes()).padStart(2, '0');
+            deadlineInput.value = `${dyear}-${dmonth}-${dday}T${dhours}:${dminutes}`;
         }
     } catch(e) {
-        console.error("Error formatting deadline input:", e);
+        console.error("Error formatting inputs:", e);
     }
-    {{ end }}
 
     // Open Bid Modal Helper
     function openBidModal(link) {
@@ -1367,6 +1439,17 @@
         var modalEl = document.getElementById('winnerModal');
         var winnerModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         winnerModal.show();
+    }
+
+    // Inform user when bidding is unavailable (not started or closed)
+    function alertBiddingUnavailable() {
+        var notStarted = {{ .AuctionNotStarted }};
+        var closed = {{ .AuctionClosed }};
+        if (notStarted) {
+            alert("ขออภัย: ขณะนี้ระบบยังไม่เปิดระบบรับเสนอราคาประมูลแชร์ประจำงวด!");
+        } else if (closed) {
+            alert("ขออภัย: หมดเขตเวลาการยื่นเสนอราคาประมูลสำหรับงวดนี้แล้ว!");
+        }
     }
 </script>
 

@@ -76,6 +76,8 @@ func IndexHandler(c *gin.Context) {
 		alertErr = "จำนวนดอกเบี้ยประมูลที่เสนอไม่ถูกต้อง!"
 	} else if errMsg == "already_received" {
 		alertErr = "สมาชิกคนนี้ได้รับแชร์ในอดีตไปแล้ว ไม่สามารถเสนอราคาประมูลได้อีก!"
+	} else if errMsg == "bid_not_started" {
+		alertErr = "ขออภัย: ขณะนี้ระบบยังไม่เปิดระบบรับเสนอราคาประมูลแชร์ประจำงวด!"
 	}
 
 	// Fetch current setting
@@ -337,15 +339,26 @@ func IndexHandler(c *gin.Context) {
 	}
 
 	// Calculate auction status
+	auctionNotStarted := false
 	auctionClosed := false
+	auctionStartStr := ""
 	auctionDeadlineStr := ""
+	nowThai := getCurrentThailandTime()
+
+	if setting.AuctionStart != nil {
+		auctionStartStr = setting.AuctionStart.Format(time.RFC3339)
+		if nowThai.Before(*setting.AuctionStart) {
+			auctionNotStarted = true
+		}
+	}
 	if setting.AuctionDeadline != nil {
 		auctionDeadlineStr = setting.AuctionDeadline.Format(time.RFC3339)
-		nowThai := getCurrentThailandTime()
 		if nowThai.After(*setting.AuctionDeadline) {
 			auctionClosed = true
 		}
 	}
+
+	noBidsAtAll := (len(monthBids) == 0)
 
 	// Populate Member objects in monthBids using memberLookup
 	for i := range monthBids {
@@ -384,8 +397,11 @@ func IndexHandler(c *gin.Context) {
 		"YearlyTotalPrincipal": yearlyTotalPrincipal,
 		"YearlyTotalInterest":  yearlyTotalInterest,
 		"YearlyTotalCollected": yearlyTotalCollected,
+		"AuctionNotStarted":    auctionNotStarted,
 		"AuctionClosed":        auctionClosed,
+		"AuctionStartStr":      auctionStartStr,
 		"AuctionDeadlineStr":   auctionDeadlineStr,
+		"NoBidsAtAll":          noBidsAtAll,
 		"Bids":                 monthBids,
 	})
 }
@@ -720,6 +736,20 @@ func UpdateSettingsHandler(c *gin.Context) {
 		return
 	}
 
+	startStr := c.PostForm("auction_start")
+	var start *time.Time = nil
+	if startStr != "" {
+		loc, _ := time.LoadLocation("Asia/Bangkok")
+		if t, err := time.ParseInLocation("2006-01-02T15:04", startStr, loc); err == nil {
+			start = &t
+		} else {
+			if t, err := time.Parse("2006-01-02T15:04", startStr); err == nil {
+				tThai := t.Add(-7 * time.Hour)
+				start = &tThai
+			}
+		}
+	}
+
 	deadlineStr := c.PostForm("auction_deadline")
 	var deadline *time.Time = nil
 	if deadlineStr != "" {
@@ -735,7 +765,7 @@ func UpdateSettingsHandler(c *gin.Context) {
 	}
 
 	if getSheetsURL() != "" {
-		if err := updateSettingsSheets(monthlyAmount, deadline); err != nil {
+		if err := updateSettingsSheets(monthlyAmount, start, deadline); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update settings on Google Sheets"})
 			return
 		}
@@ -745,10 +775,11 @@ func UpdateSettingsHandler(c *gin.Context) {
 
 	var setting Setting
 	if err := DB.First(&setting, 1).Error; err != nil {
-		setting = Setting{ID: 1, MonthlyAmount: monthlyAmount, AuctionDeadline: deadline, UpdatedAt: time.Now()}
+		setting = Setting{ID: 1, MonthlyAmount: monthlyAmount, AuctionStart: start, AuctionDeadline: deadline, UpdatedAt: time.Now()}
 		DB.Create(&setting)
 	} else {
 		setting.MonthlyAmount = monthlyAmount
+		setting.AuctionStart = start
 		setting.AuctionDeadline = deadline
 		setting.UpdatedAt = time.Now()
 		DB.Save(&setting)
@@ -852,8 +883,14 @@ func SubmitBidHandler(c *gin.Context) {
 		DB.First(&setting, 1)
 	}
 
+	nowThai := getCurrentThailandTime()
+	if setting.AuctionStart != nil {
+		if nowThai.Before(*setting.AuctionStart) {
+			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=bid_not_started")
+			return
+		}
+	}
 	if setting.AuctionDeadline != nil {
-		nowThai := getCurrentThailandTime()
 		if nowThai.After(*setting.AuctionDeadline) {
 			c.Redirect(http.StatusSeeOther, "/?month="+monthStr+"&year="+yearStr+"&error=bid_deadline_passed")
 			return
