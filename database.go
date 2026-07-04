@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	sqlite "github.com/glebarez/sqlite"
@@ -18,6 +19,12 @@ func InitDB() {
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
 		dbPath = "share_system.db"
+	} else {
+		// Ensure parent directory exists for the database file
+		dir := filepath.Dir(dbPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Printf("Warning: Failed to create database directory %s: %v", dir, err)
+		}
 	}
 	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
