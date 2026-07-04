@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	sqlite "github.com/glebarez/sqlite"
@@ -14,7 +15,11 @@ var DB *gorm.DB
 // InitDB initializes the SQLite connection, auto-migrates schemas, and seeds sample data if empty.
 func InitDB() {
 	var err error
-	DB, err = gorm.Open(sqlite.Open("share_system.db"), &gorm.Config{})
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "share_system.db"
+	}
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
