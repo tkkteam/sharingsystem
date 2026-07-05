@@ -13,6 +13,10 @@ export function buildRedirectPath(
   const referer = req.headers.get("referer") || "";
   let basePath = defaultPath;
 
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+  const proto = req.headers.get("x-forwarded-proto") || "http";
+  const absoluteBase = `${proto}://${host}`;
+
   if (referer) {
     try {
       const url = new URL(referer);
@@ -37,13 +41,13 @@ export function buildRedirectPath(
       }
 
       const qs = newParams.toString();
-      return qs ? `${basePath}?${qs}` : `${basePath}`;
+      return qs ? `${absoluteBase}${basePath}?${qs}` : `${absoluteBase}${basePath}`;
     } catch {
       // ignore parse errors, fall through to default
     }
   }
 
-  if (!queryPart) return basePath;
+  if (!queryPart) return `${absoluteBase}${basePath}`;
   const fallbackParams = new URLSearchParams(queryPart);
-  return `${basePath}?${fallbackParams.toString()}`;
+  return `${absoluteBase}${basePath}?${fallbackParams.toString()}`;
 }
