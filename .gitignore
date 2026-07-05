@@ -16,4 +16,28 @@ main
 .DS_Store
 Thumbs.db
 COde.txt
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
+# Next.js build output
+next-app/.next/
+next-app/node_modules/
+next-app/out/
+next-app/build/
+
+# Local database files
+.kilo/
+next-app/data/
+next-app/kilo.db
+next-app/kilo.db-journal
+next-app/kilo.db-shm
+next-app/kilo.db-wal
+
+# Slips
+next-app/data/slips/

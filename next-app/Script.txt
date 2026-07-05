@@ -1,0 +1,297 @@
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // ตรวจสอบและสร้างชีตหากไม่มี
+  var memberSheet = ss.getSheetByName("Members") || ss.insertSheet("Members");
+  var paymentSheet = ss.getSheetByName("Payments") || ss.insertSheet("Payments");
+  var bidsSheet = ss.getSheetByName("Bids") || ss.insertSheet("Bids");
+  var settingSheet = ss.getSheetByName("Settings") || ss.insertSheet("Settings");
+
+  setupHeaders(memberSheet, ["ID", "Name", "Phone", "HasReceivedShare", "InterestAmount", "ReceivedMonth", "ReceivedYear", "CreatedAt", "BidPassword"]);
+  setupHeaders(paymentSheet, ["ID", "MemberID", "Month", "Year", "Paid", "PaidDate"]);
+  setupHeaders(bidsSheet, ["ID", "MemberID", "Month", "Year", "Amount", "CreatedAt"]);
+  setupHeaders(settingSheet, ["MonthlyAmount", "AuctionStart", "AuctionDeadline"]);
+
+  // 1. อ่านข้อมูลสมาชิก
+  var members = readSheetData(memberSheet, function(row) {
+    return {
+      id: parseInt(row[0]),
+      name: row[1],
+      phone: row[2],
+      has_received_share: row[3] === "TRUE" || row[3] === true,
+      interest_amount: parseFloat(row[4]) || 0,
+      received_month: parseInt(row[5]) || 0,
+      received_year: parseInt(row[6]) || 0,
+      created_at: row[7] ? new Date(row[7]).toISOString() : new Date().toISOString(),
+      bid_password: String(row[8] || "1234") // PIN คอลัมน์ที่ 9 (I)
+    };
+  });
+
+  // 2. อ่านข้อมูลชำระเงิน
+  var payments = readSheetData(paymentSheet, function(row) {
+    return {
+      id: parseInt(row[0]),
+      member_id: parseInt(row[1]),
+      month: parseInt(row[2]),
+      year: parseInt(row[3]),
+      paid: row[4] === "TRUE" || row[4] === true,
+      paid_date: row[5] ? new Date(row[5]).toISOString() : null
+    };
+  });
+
+  // 3. อ่านข้อมูลการประมูล (Bids)
+  var bids = readSheetData(bidsSheet, function(row) {
+    return {
+      id: parseInt(row[0]),
+      member_id: parseInt(row[1]),
+      month: parseInt(row[2]),
+      year: parseInt(row[3]),
+      amount: parseFloat(row[4]) || 0,
+      created_at: row[5] ? new Date(row[5]).toISOString() : new Date().toISOString()
+    };
+  });
+
+  // 4. อ่านข้อมูลการตั้งค่า (เพิ่มการอ่าน AuctionActive ในคอลัมน์ที่ 4)
+  var settingData = settingSheet.getDataRange().getValues();
+  var monthlyAmount = 1000;
+  var auctionStart = null;
+  var auctionDeadline = null;
+  var auctionActive = true;
+  if (settingData.length > 1) {
+    monthlyAmount = parseFloat(settingData[1][0]) || 1000;
+    auctionStart = settingData[1][1] ? new Date(settingData[1][1]).toISOString() : null;
+    auctionDeadline = settingData[1][2] ? new Date(settingData[1][2]).toISOString() : null;
+    auctionActive = settingData[1][3] === undefined || settingData[1][3] === "" || settingData[1][3] === "TRUE" || settingData[1][3] === true;
+  }
+
+  var result = {
+    members: members,
+    payments: payments,
+    bids: bids,
+    setting: { 
+      MonthlyAmount: monthlyAmount,
+      AuctionStart: auctionStart,
+      AuctionDeadline: auctionDeadline,
+      AuctionActive: auctionActive
+    }
+  };
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var memberSheet = ss.getSheetByName("Members");
+  var paymentSheet = ss.getSheetByName("Payments");
+  var bidsSheet = ss.getSheetByName("Bids") || initBidsSheet(ss);
+  var settingSheet = ss.getSheetByName("Settings");
+
+  var postData = JSON.parse(e.postData.contents);
+  var action = postData.action;
+
+  // เพิ่มสมาชิก
+  if (action === "add_member") {
+    var lastRow = memberSheet.getLastRow();
+    var nextId = 1;
+    if (lastRow > 1) {
+      var ids = memberSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      nextId = Math.max.apply(Math, ids.map(function(r) { return parseInt(r[0]); })) + 1;
+    }
+    memberSheet.appendRow([
+      nextId,
+      postData.name,
+      postData.phone || "",
+      false,
+      0,
+      0,
+      0,
+      new Date().toISOString(),
+      postData.bid_password || "1234"
+    ]);
+    return makeResponse({ success: true, id: nextId });
+  }
+
+  // แก้ไขสมาชิก
+  if (action === "update_member") {
+    var id = parseInt(postData.id);
+    var data = memberSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (parseInt(data[i][0]) === id) {
+        memberSheet.getRange(i + 1, 2).setValue(postData.name);
+        memberSheet.getRange(i + 1, 3).setValue(postData.phone || "");
+        memberSheet.getRange(i + 1, 4).setValue(postData.has_received_share);
+        memberSheet.getRange(i + 1, 5).setValue(postData.interest_amount);
+        memberSheet.getRange(i + 1, 6).setValue(postData.received_month);
+        memberSheet.getRange(i + 1, 7).setValue(postData.received_year);
+        memberSheet.getRange(i + 1, 9).setValue(postData.bid_password || "1234");
+        break;
+      }
+    }
+    return makeResponse({ success: true });
+  }
+
+  // ลบสมาชิก
+  if (action === "delete_member") {
+    var id = parseInt(postData.id);
+    var pData = paymentSheet.getDataRange().getValues();
+    for (var i = pData.length - 1; i >= 1; i--) {
+      if (parseInt(pData[i][1]) === id) {
+        paymentSheet.deleteRow(i + 1);
+      }
+    }
+    var mData = memberSheet.getDataRange().getValues();
+    for (var i = 1; i < mData.length; i++) {
+      if (parseInt(mData[i][0]) === id) {
+        memberSheet.deleteRow(i + 1);
+        break;
+      }
+    }
+    return makeResponse({ success: true });
+  }
+
+  // สลับสถานะชำระเงิน
+  if (action === "toggle_payment") {
+    var memberId = parseInt(postData.member_id);
+    var month = parseInt(postData.month);
+    var year = parseInt(postData.year);
+
+    var data = paymentSheet.getDataRange().getValues();
+    var foundIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (parseInt(data[i][1]) === memberId && parseInt(data[i][2]) === month && parseInt(data[i][3]) === year) {
+        foundIndex = i + 1;
+        break;
+      }
+    }
+
+    if (foundIndex !== -1) {
+      var currentPaid = paymentSheet.getRange(foundIndex, 5).getValue() === "TRUE" || paymentSheet.getRange(foundIndex, 5).getValue() === true;
+      var newPaid = !currentPaid;
+      paymentSheet.getRange(foundIndex, 5).setValue(newPaid);
+      paymentSheet.getRange(foundIndex, 6).setValue(newPaid ? new Date().toISOString() : "");
+    } else {
+      var lastRow = paymentSheet.getLastRow();
+      var nextId = 1;
+      if (lastRow > 1) {
+        var ids = paymentSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        nextId = Math.max.apply(Math, ids.map(function(r) { return parseInt(r[0]); })) + 1;
+      }
+      paymentSheet.appendRow([
+        nextId,
+        memberId,
+        month,
+        year,
+        true,
+        new Date().toISOString()
+      ]);
+    }
+    return makeResponse({ success: true });
+  }
+
+  // รีเซ็ตการชำระเงิน
+  if (action === "reset_payment") {
+    var month = parseInt(postData.month);
+    var year = parseInt(postData.year);
+    var data = paymentSheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (parseInt(data[i][2]) === month && parseInt(data[i][3]) === year) {
+        paymentSheet.deleteRow(i + 1);
+      }
+    }
+    return makeResponse({ success: true });
+  }
+
+  // ตั้งค่าวงแชร์และกำหนดวันเปิด/ปิดประมูล
+  if (action === "update_settings") {
+    settingSheet.clearContents();
+    settingSheet.appendRow(["MonthlyAmount", "AuctionStart", "AuctionDeadline", "AuctionActive"]);
+    var start = postData.start ? new Date(postData.start).toISOString() : "";
+    var deadline = postData.deadline ? new Date(postData.deadline).toISOString() : "";
+    var active = postData.active !== false;
+    settingSheet.appendRow([parseFloat(postData.monthly_amount), start, deadline, active]);
+    return makeResponse({ success: true });
+  }
+
+  // ส่งข้อมูลประมูล (Bids)
+  if (action === "submit_bid") {
+    var memberId = parseInt(postData.member_id);
+    var month = parseInt(postData.month);
+    var year = parseInt(postData.year);
+    var amount = parseFloat(postData.amount);
+    
+    var data = bidsSheet.getDataRange().getValues();
+    var foundIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (parseInt(data[i][1]) === memberId && parseInt(data[i][2]) === month && parseInt(data[i][3]) === year) {
+        foundIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (foundIndex !== -1) {
+      bidsSheet.getRange(foundIndex, 5).setValue(amount);
+      bidsSheet.getRange(foundIndex, 6).setValue(new Date().toISOString());
+    } else {
+      var lastRow = bidsSheet.getLastRow();
+      var nextId = 1;
+      if (lastRow > 1) {
+        var ids = bidsSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        nextId = Math.max.apply(Math, ids.map(function(r) { return parseInt(r[0]); })) + 1;
+      }
+      bidsSheet.appendRow([
+        nextId,
+        memberId,
+        month,
+        year,
+        amount,
+        new Date().toISOString()
+      ]);
+    }
+    return makeResponse({ success: true });
+  }
+  
+  // ลบข้อมูลประมูล (Delete Bid)
+  else if (action === "delete_bid") {
+    var memberId = parseInt(postData.member_id);
+    var month = parseInt(postData.month);
+    var year = parseInt(postData.year);
+    var data = bidsSheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (parseInt(data[i][1]) === memberId && parseInt(data[i][2]) === month && parseInt(data[i][3]) === year) {
+        bidsSheet.deleteRow(i + 1);
+      }
+    }
+    return makeResponse({ success: true });
+  }
+
+  return makeResponse({ success: false, error: "Invalid action" });
+}
+
+function setupHeaders(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  }
+}
+
+function readSheetData(sheet, parser) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === "") continue;
+    list.push(parser(data[i]));
+  }
+  return list;
+}
+
+function makeResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function initBidsSheet(ss) {
+  var sheet = ss.insertSheet("Bids");
+  sheet.appendRow(["ID", "MemberID", "Month", "Year", "Amount", "CreatedAt"]);
+  return sheet;
+}
