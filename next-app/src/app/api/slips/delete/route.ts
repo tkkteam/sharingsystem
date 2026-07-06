@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildRedirectPath } from "@/lib/redirect";
 import { getSlip, deleteSlip } from "@/lib/data";
-import path from "path";
-import fs from "fs/promises";
-
-const UPLOAD_DIR = path.join(process.cwd(), "data", "slips");
+import { deleteSlip as deleteSlipFile } from "@/lib/slip-storage";
 
 export async function POST(req: NextRequest) {
   // Strict admin check
@@ -28,11 +25,7 @@ export async function POST(req: NextRequest) {
     // Delete file if exists
     const slip = await getSlip(memberId, month, year);
     if (slip) {
-      try {
-        await fs.unlink(path.join(UPLOAD_DIR, slip.file_name));
-      } catch {
-        // ignore file delete errors
-      }
+      await deleteSlipFile(slip.file_name);
       await deleteSlip(memberId, month, year);
     }
 

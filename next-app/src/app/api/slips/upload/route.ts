@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildRedirectPath } from "@/lib/redirect";
 import { saveSlip } from "@/lib/data";
-import path from "path";
-import fs from "fs/promises";
-
-const UPLOAD_DIR = path.join(process.cwd(), "data", "slips");
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+import { uploadSlip } from "@/lib/slip-storage";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,39 +17,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!file || file.size === 0) {
-      return NextResponse.redirect(
-        new URL(buildRedirectPath(req, `error=${encodeURIComponent("กรุณาเลือกไฟล์สลิป")}`), req.url)
-      );
-    }
-
-    if (file.size > MAX_SIZE) {
-      return NextResponse.redirect(
-        new URL(buildRedirectPath(req, `error=${encodeURIComponent("ไฟล์ใหญ่เกิน 5MB")}`), req.url)
-      );
-    }
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.redirect(
-        new URL(buildRedirectPath(req, `error=${encodeURIComponent("รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, GIF)")}`), req.url)
-      );
-    }
-
-    // Ensure directory exists
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
-    // Build safe file name
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const safeExt = ["jpg", "jpeg", "png", "webp", "gif"].includes(ext) ? ext : "jpg";
-    const fileName = `slip_${memberId}_${month}_${year}_${Date.now()}.${safeExt}`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-
-    // Write file
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(filePath, buffer);
+    // Upload via storage helper (Vercel Blob or local fallback)
+    const fileIdentifier = await uploadSlip(memberId, month, year, file!);
 
     // Save record in DB
-    await saveSlip(memberId, month, year, fileName);
+    await saveSlip(memberId, month, year, fileIdentifier);
 
     return NextResponse.redirect(
       new URL(
