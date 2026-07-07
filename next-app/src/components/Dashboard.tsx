@@ -254,6 +254,11 @@ export default function Dashboard({ data }: Props) {
   }, [data.Month, data.Year, showToast, router]);
 
   const everyonePaid = data.UnpaidCount === 0 && data.TotalMembers > 0;
+  // Hide bid prices/ranking until auction ends. While open, sort by submission
+  // time instead of amount so the displayed order does not reveal the leader.
+  const bidsToShow = data.AuctionClosed
+    ? data.Bids
+    : [...data.Bids].sort((a, b) => new Date(a.CreatedAt).getTime() - new Date(b.CreatedAt).getTime());
   const hasWinnerThisMonth = data.Rows.some((row) => 
     row.Member.HasReceivedShare && 
     row.Member.ReceivedMonth === data.Month && 
@@ -447,12 +452,23 @@ export default function Dashboard({ data }: Props) {
             )}
           </div>
 
+          {/* Sealed-bid notice while auction is still open */}
+          {data.Bids.length > 0 && !data.AuctionClosed && (
+            <div className="alert alert-info d-flex align-items-center py-2 mb-3" role="alert">
+              <i className="bi bi-eye-slash-fill me-2 fs-5"></i>
+              <div>
+                <span className="fw-bold">ปิดผนึกราคาประมูล (Sealed Bid)</span>
+                <span className="d-block fs-7">ราคาเสนอและอันดับจะถูกเปิดเผยหลังหมดเวลาประมูล เพื่อความเที่ยงธรรม</span>
+              </div>
+            </div>
+          )}
+
           {data.Bids.length > 0 ? (
             <div className="table-responsive">
               <table className="table table-custom align-middle">
                 <thead>
                   <tr>
-                    <th style={{ width: "15%", textAlign: "center" }}>ลำดับที่</th>
+                    {data.AuctionClosed && <th style={{ width: "15%", textAlign: "center" }}>ลำดับที่</th>}
                     <th>ผู้เสนอราคา</th>
                     <th style={{ textAlign: "right" }}>ดอกเบี้ยเสนอ (บาท)</th>
                     <th style={{ textAlign: "center" }}>เวลาที่เสนอ</th>
@@ -460,24 +476,28 @@ export default function Dashboard({ data }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.Bids.map((bid, bIdx) => (
-                    <tr key={bid.ID} style={bIdx === 0 ? { background: "rgba(255, 193, 7, 0.05)", borderLeft: "4px solid var(--warning-color)" } : {}}>
-                      <td style={{ textAlign: "center" }}>
-                        {bIdx === 0 ? (
-                          <span className="badge bg-warning text-dark fs-7">
-                            <i className="bi bi-trophy-fill text-dark me-1"></i> อันดับ 1 (สูงสุด)
-                          </span>
-                        ) : (
-                          <span className="badge bg-secondary px-2 py-1 fs-7">อันดับ {bIdx + 1}</span>
-                        )}
-                      </td>
+                  {bidsToShow.map((bid, bIdx) => (
+                    <tr key={bid.ID} style={data.AuctionClosed && bIdx === 0 ? { background: "rgba(255, 193, 7, 0.05)", borderLeft: "4px solid var(--warning-color)" } : {}}>
+                      {data.AuctionClosed && (
+                        <td style={{ textAlign: "center" }}>
+                          {bIdx === 0 ? (
+                            <span className="badge bg-warning text-dark fs-7">
+                              <i className="bi bi-trophy-fill text-dark me-1"></i> อันดับ 1 (สูงสุด)
+                            </span>
+                          ) : (
+                            <span className="badge bg-secondary px-2 py-1 fs-7">อันดับ {bIdx + 1}</span>
+                          )}
+                        </td>
+                      )}
                       <td><span className="fw-bold text-dark">{bid.Member?.Name || "-"}</span></td>
-                      <td style={{ textAlign: "right" }} className="fw-bold text-warning fs-5">{formatMoney(bid.Amount)} ฿</td>
+                      <td style={{ textAlign: "right" }} className="fw-bold text-warning fs-5">
+                        {data.AuctionClosed ? `${formatMoney(bid.Amount)} ฿` : <span className="text-secondary fs-7">— ปิดผนึก —</span>}
+                      </td>
                       <td style={{ textAlign: "center" }} className="text-secondary fs-7">{formatThaiTime(bid.CreatedAt)}</td>
                       {data.IsAdmin && (
                         <td style={{ textAlign: "center" }}>
                           <div className="d-flex justify-content-center gap-2">
-                            {bIdx === 0 && (
+                            {data.AuctionClosed && bIdx === 0 && (
                               <button type="button" className="btn btn-sm btn-warning text-dark fw-bold px-3 py-1" onClick={() => selectWinnerFromBid(bid.MemberID, bid.Amount)}>
                                 <i className="bi bi-check-circle-fill me-1"></i> ยืนยันผลรับแชร์
                               </button>
@@ -799,7 +819,9 @@ function MemberCard({
             {row.HasBid ? (
               <div className="text-center text-warning fs-7 fw-bold py-1 bg-warning bg-opacity-10 border border-warning rounded">
                 <i className="bi bi-check-circle-fill me-1"></i>
-                {data.IsAdmin ? `เสนอราคาแล้ว: ${formatMoney(row.BidAmount)} ฿` : "เสนอราคาแล้ว"}
+                {data.IsAdmin
+                  ? (data.AuctionClosed ? `เสนอราคาแล้ว: ${formatMoney(row.BidAmount)} ฿` : "เสนอราคาแล้ว (ปิดผนึก)")
+                  : "เสนอราคาแล้ว"}
               </div>
             ) : auctionClosed ? (
               <button type="button" className="btn btn-sm btn-secondary w-100" disabled>

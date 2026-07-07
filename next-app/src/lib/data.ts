@@ -38,9 +38,20 @@ export async function computeIndexData(month: number, year: number, search: stri
     }
   }
 
+  // Determine auction status early so bid amounts can be hidden (sealed)
+  // from the admin while the auction is still open.
+  const auctionActive = setting.AuctionActive !== false;
+  const auctionClosed = !auctionActive || (setting.AuctionDeadline ? new Date() >= (parseThaiDate(setting.AuctionDeadline) || new Date()) : false);
+
+  // While the auction is open, sort bids by submission time (not amount) so the
+  // array order does not leak the ranking to the admin. After close, rank by amount.
   const sortedBids = bids
     .filter((b) => b.month === month && b.year === year)
-    .sort((a, b) => b.amount - a.amount || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    .sort((a, b) =>
+      auctionClosed
+        ? b.amount - a.amount || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        : new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
 
   let paidCount = 0;
   let unpaidCount = 0;
@@ -58,7 +69,8 @@ export async function computeIndexData(month: number, year: number, search: stri
 
     const memberBids = bidMap.get(String(m.id)) || [];
     const hasBid = memberBids.length > 0;
-    const bidAmount = memberBids.length > 0 ? memberBids[0].amount : 0;
+    // Hide bid amount while auction is open (sealed bid). Only reveal after close.
+    const bidAmount = hasBid && auctionClosed ? memberBids[0].amount : 0;
 
     let winnerNumber = 0;
     if (m.has_received_share) {
@@ -114,9 +126,7 @@ export async function computeIndexData(month: number, year: number, search: stri
       )
     : rows;
 
-  const auctionActive = setting.AuctionActive !== false;
   const auctionNotStarted = auctionActive && setting.AuctionStart ? new Date() < (parseThaiDate(setting.AuctionStart) || new Date()) : false;
-  const auctionClosed = !auctionActive || (setting.AuctionDeadline ? new Date() >= (parseThaiDate(setting.AuctionDeadline) || new Date()) : false);
   const noBidsAtAll = sortedBids.length === 0 && auctionClosed;
 
   const yearlySummaries: MonthSummary[] = [];
@@ -180,7 +190,7 @@ export async function computeIndexData(month: number, year: number, search: stri
       } : undefined,
       Month: b.month,
       Year: b.year,
-      Amount: b.amount,
+      Amount: auctionClosed ? b.amount : 0,
       CreatedAt: b.created_at,
     };
   });
